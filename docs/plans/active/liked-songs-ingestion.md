@@ -1,6 +1,6 @@
 # Liked Songs Ingestion + Storage
 
-**Status:** Not Started
+**Status:** In Progress
 **Created:** 2026-03-21
 **Goal:** Fetch a user's liked songs from Spotify, store them in the database, and expose a manual sync action via tRPC so the dashboard can trigger ingestion. Sync runs as a background job via Inngest to avoid Vercel function timeouts.
 
@@ -88,16 +88,16 @@ Background job that orchestrates token refresh → Spotify fetch → DB storage 
 
 Expose sync via tRPC and add a button to the dashboard.
 
-- [ ] Create `src/server/routers/library.ts` with:
+- [x] Create `src/server/routers/library.ts` with:
   - `sync` mutation — fires `inngest.send({ name: "library/sync.requested", data: { userId } })`, returns `{ status: "started" }`. Inngest idempotency prevents duplicate in-flight syncs.
   - `list` query — calls `trackRepository.findByUserId(userId)`, returns tracks
   - `count` query — calls `trackRepository.countByUserId(userId)`
-- [ ] Register library router in `src/server/routers/_app.ts`
-- [ ] Add "Sync Library" button to dashboard page
+- [x] Register library router in `src/server/routers/_app.ts`
+- [x] Add "Sync Library" button to dashboard page
   - Call `trpc.library.sync.useMutation()` on click
   - Show "Syncing..." state (optimistic — job runs in background)
   - Display song count (poll `trpc.library.count` or refresh on next page load)
-- [ ] Add router tests
+- [x] Add router tests
 
 **PR:** "Add library tRPC router and dashboard sync button"
 
