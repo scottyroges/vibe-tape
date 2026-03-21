@@ -23,6 +23,7 @@ Free for as long as possible. Every infrastructure choice prioritizes free tiers
 | AI — vibe analysis | Claude API (Sonnet) | ~$0.01–0.02 per playlist generation. Powers seed analysis and vibe naming. |
 | AI — art generation | Stable Diffusion (Replicate) | ~$0.005/image. Deferred to Tier 2. GPT-4o image gen as alternative (~$0.06). |
 | Music metadata | Last.fm API + MusicBrainz | Genre tags, BPM, era data. Free. Replaces Spotify audio features (removed Nov 2024). |
+| Background jobs | Inngest (free tier) | 50k executions/month free. Native Next.js/Vercel integration. Step functions with retries. See [ADR 009](decisions/009-async-job-processing.md). |
 | Spotify integration | Raw REST API (no SDK) | Official SDK is poorly maintained and broke in Feb 2026. Direct fetch calls are ~150 lines and we own them fully. |
 
 ---
@@ -84,11 +85,12 @@ Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). 
 
 ## API Layer
 
-All app logic is exposed via tRPC procedures (see [ADR 002](decisions/002-trpc-api-layer.md)). The only raw API routes are auth handlers.
+All app logic is exposed via tRPC procedures (see [ADR 002](decisions/002-trpc-api-layer.md)). The only raw API routes are auth and infrastructure handlers.
 
 ### Raw routes
 - `GET/POST /api/auth/[...all]` — Better Auth handler (login, callback, session management)
 - `GET/POST /api/trpc/[trpc]` — tRPC fetch adapter
+- `GET/POST/PUT /api/inngest` — Inngest serve handler (receives events and invokes background functions)
 
 ### tRPC routers (planned)
 
@@ -120,26 +122,23 @@ This is the core product logic. Runs on every playlist generation request.
 
 ## Background Processing
 
-### Nightly library sync
+Background jobs run via **Inngest** — a managed job queue that integrates natively with Next.js on Vercel. Jobs are defined as step functions where each step is independently retryable. See [ADR 009](decisions/009-async-job-processing.md) for the full decision and migration path.
 
-Vercel cron fires at 3am daily. Hits `/api/jobs/sync-all` with a `CRON_SECRET` header for auth. Route loops through users due for sync:
+### How it works
 
-- Lazily refresh Spotify token if expired
-- Fetch new liked songs since last sync (`added_after` timestamp)
-- Enrich new songs with Last.fm metadata
-- Score new songs against each user's existing playlists
-- Add qualifying songs to playlists, update `last_synced_at`
+The Inngest SDK exposes a serve handler at `/api/inngest`. The Inngest server (cloud in production, Docker container in local dev) discovers registered functions via this endpoint and invokes them by sending HTTP requests back to it. Functions are defined in `src/inngest/functions/` and registered in the serve handler.
 
-Rate limiting: process users sequentially at early scale (< 1,000 users). Add batching with delays when needed.
+In production, requests to `/api/inngest` are authenticated via request signing (`INNGEST_SIGNING_KEY`). In local dev (`INNGEST_DEV=1`), signature verification is disabled.
 
-### AI art generation
+### Local development
 
-Triggered async after playlist generation.
+The Inngest Dev Server runs as a Docker Compose service alongside Postgres. `docker compose up` starts both. The Dev Server dashboard is at `http://localhost:8288` and auto-discovers functions via `host.docker.internal:3000/api/inngest`.
 
-- Cache key: sorted seed song IDs joined as string
-- Check R2 cache first — if hit, return immediately
-- If miss: call Stable Diffusion via Replicate with prompt derived from album art colors + vibe description
-- Store result in R2, update `playlists.art_image_url`
+### Planned jobs
+
+- **Library sync** (Tier 1) — paginate a user's Spotify liked songs, upsert to database. Triggered manually via tRPC.
+- **Nightly auto-sync** (future) — batch-refresh all users' libraries on a schedule via Vercel cron triggering an Inngest event.
+- **AI art generation** (Tier 2+) — generate vibe card art async after playlist creation. Cache in R2.
 
 ---
 
@@ -149,6 +148,7 @@ Triggered async after playlist generation.
 |-----------|-----------|---------------|-----------|
 | Claude (vibe analysis) | ~$0.015/gen | ~$9/mo | N/A |
 | SD image generation | ~$0.005/image | ~$3/mo | Skip for free users |
+| Inngest (background jobs) | — | $0 | Free 50k executions/mo |
 | Vercel hosting | — | $0 (hobby tier) | Free |
 | Neon database | — | $0 (free tier) | Free |
 | Cloudflare R2 | — | < $1/mo | Free 10GB |

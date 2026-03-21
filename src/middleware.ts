@@ -8,6 +8,7 @@ function isPublicRoute(pathname: string): boolean {
   if (publicRoutes.includes(pathname)) return true;
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname.startsWith("/api/trpc")) return true;
+  if (pathname.startsWith("/api/inngest")) return true;
   if (pathname.startsWith("/vibe/")) return true;
   return false;
 }
