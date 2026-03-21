@@ -54,7 +54,7 @@ export const auth = betterAuth({
         clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
         authorizationUrl: "https://accounts.spotify.com/authorize",
         tokenUrl: "https://accounts.spotify.com/api/token",
-        scopes: ["user-library-read", "playlist-modify-public", "playlist-modify-private"],
+        scopes: ["user-read-email", "user-library-read", "playlist-modify-public", "playlist-modify-private"],
         getUserInfo: async (tokens) => { /* fetch /v1/me */ },
       }],
     }),
@@ -81,7 +81,7 @@ export const authClient = createAuthClient();
 
 1. User clicks "Continue with Spotify" → `authClient.signIn.social({ provider: "spotify" })`
 2. Redirect to `accounts.spotify.com/authorize` with scopes + state param
-3. Spotify redirects to Better Auth callback with authorization code
+3. Spotify redirects to `/api/auth/oauth2/callback/spotify` with authorization code
 4. Better Auth exchanges code for `access_token` + `refresh_token`
 5. Tokens stored in Better Auth's `account` table
 6. Session cookie set (30-day expiry, refreshed daily)
@@ -99,6 +99,11 @@ Tokens are refreshed lazily via `getValidToken(userId)` in `src/lib/spotify-toke
 ### Local Development Note
 
 Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). Use `http://127.0.0.1:3000` and set `BETTER_AUTH_URL=http://127.0.0.1:3000` in `.env.local`.
+
+**Spotify redirect URI:** Better Auth's `genericOAuth` plugin uses the path `/api/auth/oauth2/callback/{providerId}`. In the Spotify Developer Dashboard, set the redirect URI to:
+```
+http://127.0.0.1:3000/api/auth/oauth2/callback/spotify
+```
 
 ## Middleware
 
