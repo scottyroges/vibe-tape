@@ -1,6 +1,5 @@
-export type Song = {
+export type Track = {
   id: string;
-  userId: string;
   spotifyId: string;
   name: string;
   artist: string;
@@ -9,7 +8,14 @@ export type Song = {
   lastfmGenres: string | null;
   bpm: number | null;
   era: string | null;
-  addedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type LikedSong = {
+  id: string;
+  userId: string;
+  trackId: string;
+  addedAt: Date;
+  createdAt: Date;
 };

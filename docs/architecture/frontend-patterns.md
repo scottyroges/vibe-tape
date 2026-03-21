@@ -80,10 +80,10 @@ export default async function DashboardPage() {
 ### Import from `@/domain/types` or Specific Domain Files
 
 ```typescript
-import type { Song } from "@/domain/song";
+import type { Track, LikedSong } from "@/domain/song";
 import type { Playlist } from "@/domain/playlist";
 // or
-import type { Song, Playlist } from "@/domain/types";
+import type { Track, LikedSong, Playlist } from "@/domain/types";
 ```
 
 ## Layout Patterns

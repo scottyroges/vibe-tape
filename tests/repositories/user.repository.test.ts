@@ -4,7 +4,7 @@ import { createMockDb } from "../helpers/mock-db";
 
 vi.mock("server-only", () => ({}));
 
-const { db, executeTakeFirst, execute, selectFrom } = createMockDb();
+const { db, executeTakeFirst, executeTakeFirstOrThrow, execute, selectFrom, updateTable } = createMockDb();
 
 vi.mock("@/lib/db", () => ({ db }));
 
@@ -56,6 +56,18 @@ describe("userRepository", () => {
 
       expect(result).toEqual(users);
       expect(selectFrom).toHaveBeenCalledWith("user");
+    });
+  });
+
+  describe("updateSyncStatus", () => {
+    it("counts liked songs and updates user", async () => {
+      executeTakeFirstOrThrow.mockResolvedValue({ count: 25 });
+      execute.mockResolvedValue(undefined);
+
+      await userRepository.updateSyncStatus("u1");
+
+      expect(selectFrom).toHaveBeenCalledWith("likedSong");
+      expect(updateTable).toHaveBeenCalledWith("user");
     });
   });
 });

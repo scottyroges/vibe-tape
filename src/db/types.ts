@@ -21,6 +21,13 @@ export type Account = {
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
 };
+export type LikedSong = {
+    id: string;
+    userId: string;
+    trackId: string;
+    addedAt: Timestamp;
+    createdAt: Generated<Timestamp>;
+};
 export type Playlist = {
     id: string;
     userId: string;
@@ -43,9 +50,8 @@ export type Session = {
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
 };
-export type Song = {
+export type Track = {
     id: string;
-    userId: string;
     spotifyId: string;
     name: string;
     artist: string;
@@ -54,7 +60,6 @@ export type Song = {
     lastfmGenres: string | null;
     bpm: number | null;
     era: string | null;
-    addedAt: Timestamp;
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
 };
@@ -81,9 +86,10 @@ export type Verification = {
 };
 export type DB = {
     account: Account;
+    likedSong: LikedSong;
     playlist: Playlist;
     session: Session;
-    song: Song;
+    track: Track;
     user: User;
     verification: Verification;
 };
