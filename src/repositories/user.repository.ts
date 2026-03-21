@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { User } from "@/domain/types";
+import type { User, SyncStatus } from "@/domain/types";
 
 export const userRepository = {
   async findById(id: string): Promise<User | null> {
@@ -30,7 +30,34 @@ export const userRepository = {
       .execute();
   },
 
-  async updateSyncStatus(userId: string): Promise<void> {
+  async setSyncStatus(userId: string, status: SyncStatus): Promise<void> {
+    await db
+      .updateTable("user")
+      .set({ syncStatus: status, updatedAt: new Date() })
+      .where("id", "=", userId)
+      .execute();
+  },
+
+  async trySetSyncing(userId: string): Promise<boolean> {
+    const result = await db
+      .updateTable("user")
+      .set({ syncStatus: "SYNCING" as SyncStatus, updatedAt: new Date() })
+      .where("id", "=", userId)
+      .where("syncStatus", "!=", "SYNCING" as SyncStatus)
+      .executeTakeFirst();
+    return result.numUpdatedRows > BigInt(0);
+  },
+
+  async getSyncStatus(userId: string): Promise<SyncStatus> {
+    const result = await db
+      .selectFrom("user")
+      .where("id", "=", userId)
+      .select("syncStatus")
+      .executeTakeFirstOrThrow();
+    return result.syncStatus as SyncStatus;
+  },
+
+  async updateSyncMetrics(userId: string): Promise<void> {
     const { count } = await db
       .selectFrom("likedSong")
       .where("userId", "=", userId)

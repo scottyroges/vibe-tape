@@ -4,7 +4,7 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   : ColumnType<T, T | undefined, T>;
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
-import type { UserTier } from "./enums";
+import type { UserTier, SyncStatus } from "./enums";
 
 export type Account = {
     id: string;
@@ -71,6 +71,7 @@ export type User = {
     image: string | null;
     tier: Generated<UserTier>;
     songCount: Generated<number>;
+    syncStatus: Generated<SyncStatus>;
     needsReauth: Generated<boolean>;
     lastSyncedAt: Timestamp | null;
     createdAt: Generated<Timestamp>;

@@ -117,6 +117,18 @@ Vibe Tape uses an app-shell pattern where the authenticated app area (`(app)` ro
 - Child layouts use percentage-based heights relative to their parent
 - This avoids mobile Safari viewport unit bugs (address bar show/hide)
 
+## Background Job Status Polling
+
+For long-running operations triggered by mutations (e.g., library sync via Inngest), the dashboard uses a poll-on-demand pattern rather than WebSockets or server-sent events.
+
+**Pattern:** The mutation fires the background job. On success, the client optimistically sets the status to the "in progress" state via `queryClient.setQueryData`. A status query polls the server every 2 seconds while the status is active, using `refetchInterval` with a conditional function. When the status transitions back to idle, a `useEffect` with a ref invalidates dependent queries (e.g., song count).
+
+**Key details:**
+- `refetchInterval` returns `2000` while syncing, `false` otherwise — polling stops automatically
+- Server-side `trySetSyncing()` is an atomic compare-and-set that prevents duplicate syncs regardless of client behavior
+- The mutation returns `already_syncing` if the user is already mid-sync, so the client can handle it gracefully
+- Error states come from two sources: mutation failure (couldn't start) and sync status `FAILED` (job crashed)
+
 ## Common Pitfalls
 
 ### Form Handling with Enter Key

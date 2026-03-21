@@ -22,6 +22,7 @@ Better Auth user model extended with Spotify-specific fields. Owns Songs and Pla
 Fields:
 - `tier` — Controls feature access. Values: `FREE` (default, 250 song cap), `STANDARD` ($10/yr, all songs), `POWER` ($25/yr, higher limits).
 - `songCount` — Cached count of liked songs. Updated on sync.
+- `syncStatus` — Tracks library sync state. Values: `IDLE` (default), `SYNCING`, `FAILED`. Set atomically via `trySetSyncing()` to prevent concurrent syncs. Reset to `IDLE` on success or `FAILED` via Inngest's `onFailure` callback.
 - `needsReauth` — Set to `true` when Spotify refresh token is revoked. User must re-authenticate on next login.
 - `lastSyncedAt` — Timestamp of last successful library sync.
 

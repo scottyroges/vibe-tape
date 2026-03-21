@@ -5,11 +5,13 @@ const {
   mockFetchLikedSongs,
   mockUpsertMany,
   mockUpdateSyncStatus,
+  mockSetSyncStatus,
 } = vi.hoisted(() => ({
   mockGetValidToken: vi.fn(),
   mockFetchLikedSongs: vi.fn(),
   mockUpsertMany: vi.fn(),
   mockUpdateSyncStatus: vi.fn(),
+  mockSetSyncStatus: vi.fn(),
 }));
 
 vi.mock("@/lib/spotify-token", () => ({
@@ -25,13 +27,16 @@ vi.mock("@/repositories/track.repository", () => ({
 }));
 
 vi.mock("@/repositories/user.repository", () => ({
-  userRepository: { updateSyncStatus: mockUpdateSyncStatus },
+  userRepository: {
+    updateSyncMetrics: mockUpdateSyncStatus,
+    setSyncStatus: mockSetSyncStatus,
+  },
 }));
 
 vi.mock("@/lib/inngest", () => ({
   inngest: {
-    createFunction: vi.fn((_opts: unknown, handler: (...args: unknown[]) => unknown) => {
-      return { handler, _opts };
+    createFunction: vi.fn((opts: Record<string, unknown>, handler: (...args: unknown[]) => unknown) => {
+      return { handler, opts };
     }),
   },
 }));
@@ -50,11 +55,15 @@ function createMockStep() {
 describe("syncLibrary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSetSyncStatus.mockResolvedValue(undefined);
   });
 
-  const handler = (syncLibrary as unknown as { handler: (...args: unknown[]) => unknown }).handler;
+  const { handler, opts } = syncLibrary as unknown as {
+    handler: (...args: unknown[]) => unknown;
+    opts: { onFailure: (...args: unknown[]) => Promise<void> };
+  };
 
-  it("orchestrates all 4 steps in order", async () => {
+  it("orchestrates all steps in order", async () => {
     mockGetValidToken.mockResolvedValue({ accessToken: "tok-123" });
     mockFetchLikedSongs.mockResolvedValue([
       {
@@ -75,36 +84,38 @@ describe("syncLibrary", () => {
     const result = await handler({ event, step });
 
     expect(result).toEqual({ synced: 1 });
-    expect(step.run).toHaveBeenCalledTimes(4);
-    expect(step.run.mock.calls[0]![0]).toBe("get-token");
-    expect(step.run.mock.calls[1]![0]).toBe("fetch-songs");
-    expect(step.run.mock.calls[2]![0]).toBe("upsert-songs");
-    expect(step.run.mock.calls[3]![0]).toBe("update-status");
+    expect(step.run).toHaveBeenCalledTimes(5);
+    expect(step.run.mock.calls[0]![0]).toBe("set-syncing");
+    expect(step.run.mock.calls[1]![0]).toBe("get-token");
+    expect(step.run.mock.calls[2]![0]).toBe("fetch-songs");
+    expect(step.run.mock.calls[3]![0]).toBe("upsert-songs");
+    expect(step.run.mock.calls[4]![0]).toBe("update-status");
 
+    expect(mockSetSyncStatus).toHaveBeenCalledWith("user-1", "SYNCING");
+    expect(mockSetSyncStatus).toHaveBeenCalledWith("user-1", "IDLE");
     expect(mockGetValidToken).toHaveBeenCalledWith("user-1");
     expect(mockFetchLikedSongs).toHaveBeenCalledWith("tok-123");
-    expect(mockUpsertMany).toHaveBeenCalledWith("user-1", [
-      expect.objectContaining({
-        spotifyId: "sp1",
-        addedAt: expect.any(Date),
-      }),
-    ]);
     expect(mockUpdateSyncStatus).toHaveBeenCalledWith("user-1");
   });
 
-  it("throws when getValidToken returns null", async () => {
-    mockGetValidToken.mockResolvedValue(null);
+  it("throws without catching when a step fails", async () => {
+    mockGetValidToken.mockRejectedValue(new Error("token error"));
 
     const step = createMockStep();
     const event = { data: { userId: "user-1" } };
 
-    await expect(handler({ event, step })).rejects.toThrow(
-      "No valid Spotify token for user user-1"
-    );
+    await expect(handler({ event, step })).rejects.toThrow("token error");
 
-    expect(mockFetchLikedSongs).not.toHaveBeenCalled();
-    expect(mockUpsertMany).not.toHaveBeenCalled();
-    expect(mockUpdateSyncStatus).not.toHaveBeenCalled();
+    expect(mockSetSyncStatus).toHaveBeenCalledWith("user-1", "SYNCING");
+    expect(mockSetSyncStatus).not.toHaveBeenCalledWith("user-1", "FAILED");
+  });
+
+  it("onFailure sets status to FAILED", async () => {
+    const failureEvent = { data: { event: { data: { userId: "user-1" } } } };
+
+    await opts.onFailure({ event: failureEvent });
+
+    expect(mockSetSyncStatus).toHaveBeenCalledWith("user-1", "FAILED");
   });
 
   it("rehydrates Date fields before upserting", async () => {

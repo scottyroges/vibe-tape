@@ -22,6 +22,7 @@ model User {
   image         String?
   tier          UserTier   @default(FREE)
   songCount     Int        @default(0) @map("song_count")
+  syncStatus    SyncStatus @default(IDLE) @map("sync_status")
   needsReauth   Boolean    @default(false) @map("needs_reauth")
   lastSyncedAt  DateTime?  @map("last_synced_at")
   accounts      Account[]
@@ -87,6 +88,12 @@ enum UserTier {
   FREE
   STANDARD
   POWER
+}
+
+enum SyncStatus {
+  IDLE
+  SYNCING
+  FAILED
 }
 
 model Track {

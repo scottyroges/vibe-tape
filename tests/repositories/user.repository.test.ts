@@ -59,12 +59,12 @@ describe("userRepository", () => {
     });
   });
 
-  describe("updateSyncStatus", () => {
+  describe("updateSyncMetrics", () => {
     it("counts liked songs and updates user", async () => {
       executeTakeFirstOrThrow.mockResolvedValue({ count: 25 });
       execute.mockResolvedValue(undefined);
 
-      await userRepository.updateSyncStatus("u1");
+      await userRepository.updateSyncMetrics("u1");
 
       expect(selectFrom).toHaveBeenCalledWith("likedSong");
       expect(updateTable).toHaveBeenCalledWith("user");
