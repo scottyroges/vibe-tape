@@ -47,6 +47,7 @@ export const auth = betterAuth({
           authorizationUrl: "https://accounts.spotify.com/authorize",
           tokenUrl: "https://accounts.spotify.com/api/token",
           scopes: [
+            "user-read-email",
             "user-library-read",
             "playlist-modify-public",
             "playlist-modify-private",

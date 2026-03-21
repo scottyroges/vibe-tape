@@ -36,6 +36,7 @@ We run a server-side Next.js app and can safely store the client secret. Authori
 Better Auth's `genericOAuth` plugin handles the OAuth dance and session cookie. We manually store the Spotify tokens in our own `users` table alongside the Better Auth session.
 
 **Scopes requested:**
+- `user-read-email` — required by Better Auth to create user accounts
 - `user-library-read` — read liked songs
 - `playlist-modify-public` — create/update public playlists
 - `playlist-modify-private` — create/update private playlists
@@ -43,7 +44,7 @@ Better Auth's `genericOAuth` plugin handles the OAuth dance and session cookie. 
 ### Initial login flow
 
 1. User clicks login → redirect to `accounts.spotify.com/authorize` with scopes + state param
-2. Spotify redirects to `/api/auth/callback` with authorization code
+2. Spotify redirects to `/api/auth/oauth2/callback/spotify` with authorization code
 3. Server exchanges code for `access_token` + `refresh_token` via `POST accounts.spotify.com/api/token`
 4. Tokens stored in `users` table with `token_expires_at` timestamp
 5. Better Auth sets session cookie (30-day expiry, refreshed daily)
@@ -62,7 +63,7 @@ Better Auth's `genericOAuth` plugin handles the OAuth dance and session cookie. 
 
 ### Local development note
 
-Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). Use `http://127.0.0.1:3000` and set `BETTER_AUTH_URL=http://127.0.0.1:3000` in `.env`.
+Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). Use `http://127.0.0.1:3000` and set `BETTER_AUTH_URL=http://127.0.0.1:3000` in `.env`. The Spotify Developer Dashboard redirect URI must be set to `http://127.0.0.1:3000/api/auth/oauth2/callback/spotify`.
 
 ---
 
