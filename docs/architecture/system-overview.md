@@ -50,6 +50,9 @@ src/
 │
 ├── domain/                    # Shared types and interfaces (no runtime code)
 │
+├── inngest/                   # Inngest background job functions
+│   └── functions/             # One file per job (sync-library, etc.)
+│
 ├── lib/                       # External API clients and utilities
 │   ├── db.ts                  # Kysely database singleton
 │   ├── id.ts                  # CUID2 ID generation

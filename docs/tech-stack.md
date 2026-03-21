@@ -135,9 +135,9 @@ In production, requests to `/api/inngest` are authenticated via request signing 
 
 The Inngest Dev Server runs as a Docker Compose service alongside Postgres. `docker compose up` starts both. The Dev Server dashboard is at `http://localhost:8288` and auto-discovers functions via `host.docker.internal:3000/api/inngest`.
 
-### Planned jobs
+### Jobs
 
-- **Library sync** (Tier 1) — paginate a user's Spotify liked songs, upsert to database. Triggered manually via tRPC.
+- **Library sync** (`sync-library`) — Fetches a user's Spotify liked songs and upserts to database. Four steps: get token, fetch songs, upsert tracks, update sync status. Triggered by `library/sync.requested` event with `{ userId }`. Idempotent per user with concurrency limit of 1.
 - **Nightly auto-sync** (future) — batch-refresh all users' libraries on a schedule via Vercel cron triggering an Inngest event.
 - **AI art generation** (Tier 2+) — generate vibe card art async after playlist creation. Cache in R2.
 
