@@ -122,7 +122,14 @@ export function middleware(request: NextRequest) {
 }
 ```
 
-**Public routes:** `/`, `/login`, `/api/auth/*`, `/api/trpc/*`, `/vibe/*` (shared vibe cards)
+**Public routes:** `/`, `/login`, `/api/auth/*`, `/api/trpc/*`, `/api/inngest/*`, `/vibe/*` (shared vibe cards)
+
+### Inngest Endpoint Auth
+
+`/api/inngest` is public in our middleware (no session cookie required) but protected by two layers:
+
+- **Middleware layer (our code):** Skipped — `/api/inngest` is in the public routes list so the Inngest server can reach it without a user session cookie.
+- **Inngest SDK layer (`serve()`):** In production, the SDK verifies a request signing key (`INNGEST_SIGNING_KEY`) to ensure only Inngest's cloud can invoke functions. In local dev (`INNGEST_DEV=1`), signature verification is disabled so the Docker-based Dev Server can reach the endpoint without keys.
 
 **Why cookie-only check:**
 - Faster than database lookup

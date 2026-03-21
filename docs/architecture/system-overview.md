@@ -36,6 +36,7 @@ src/
 │   ├── (app)/                 # Authenticated app pages (session-validated layout)
 │   │   └── dashboard/
 │   ├── api/auth/[...all]/     # Better Auth API handler
+│   ├── api/inngest/           # Inngest serve handler (background job invocation)
 │   └── api/trpc/[trpc]/      # tRPC HTTP handler
 │
 ├── server/                    # Server-side code
@@ -54,6 +55,7 @@ src/
 │   ├── id.ts                  # CUID2 ID generation
 │   ├── anthropic.ts           # Anthropic SDK singleton
 │   ├── auth-client.ts         # Better Auth React client
+│   ├── inngest.ts             # Inngest client singleton
 │   ├── spotify-token.ts       # Lazy Spotify token refresh
 │   └── trpc/                  # tRPC wiring
 │       ├── client.tsx         # React client (TRPCReactProvider, useTRPC)

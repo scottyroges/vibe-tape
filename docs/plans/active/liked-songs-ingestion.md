@@ -11,10 +11,23 @@
 Add Inngest as the background job infrastructure (see ADR 009).
 
 - [ ] `npm install inngest`
+- [ ] Add Inngest Dev Server to `docker-compose.yml`:
+  ```yaml
+  inngest:
+    image: inngest/inngest:latest
+    ports:
+      - "8288:8288"
+    environment:
+      INNGEST_DEV: 1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  ```
+- [ ] Add `INNGEST_DEV=1` to `.env.local` (tells the Inngest SDK to send events to the local Dev Server instead of cloud)
+- [ ] Add `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` to `.env.example` (needed for production, not local dev)
 - [ ] Create `src/lib/inngest.ts` — Inngest client singleton (`id: "vibe-tape"`)
 - [ ] Create `src/app/api/inngest/route.ts` — serve Inngest API (GET, POST, PUT)
 - [ ] Add `/api/inngest` to the public routes list in `src/middleware.ts` (Inngest needs to reach this endpoint)
-- [ ] Verify local dev works with Inngest Dev Server (`npx inngest-cli@latest dev`)
+- [ ] Verify local dev works: `docker compose up` then `npm run dev` — Inngest Dev Server at `http://localhost:8288` should auto-discover functions via `host.docker.internal:3000/api/inngest`
 - [ ] Verify `getValidToken` (which imports `"server-only"`) works when called from an Inngest step running via the API route serve handler
 
 **PR:** "Add Inngest background job infrastructure"
@@ -104,6 +117,7 @@ Expose sync via tRPC and add a button to the dashboard.
 - **Pagination is a single Inngest step** — splitting into per-page steps would be more resilient but burns through the 50k/month free tier quickly (100 pages = 100 executions per sync). Instead, `fetchLikedSongs` handles 429 rate limits internally with retry-after backoff. If the step fails entirely, Inngest retries the whole fetch — acceptable at MVP scale.
 - **Concurrent sync prevention** — use Inngest's idempotency key on `userId` so multiple clicks don't spawn parallel jobs.
 - **Spotify rate limiting** — handled inside `fetchLikedSongs` with retry-after backoff on 429 responses, not at the Inngest step level.
+- **Inngest Dev Server via Docker** — runs as a docker-compose service alongside Postgres rather than a separate `npx inngest-cli dev` process. One `docker compose up` starts all infrastructure. The container uses `host.docker.internal` to reach the Next.js dev server on the host.
 
 ## Open Questions
 
