@@ -37,7 +37,7 @@ export default function DashboardPage() {
       syncMutation.reset();
     }
     prevStatusRef.current = currentStatus;
-  }, [syncStatusQuery.data?.status]);
+  }, [syncStatusQuery.data?.status, queryClient, syncMutation, trpc.library.count]);
 
   return (
     <div className={styles.container}>

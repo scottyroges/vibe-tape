@@ -107,7 +107,7 @@ describe("DashboardPage", () => {
 
   it("disables button after clicking sync (optimistic update)", async () => {
     const user = userEvent.setup();
-    const { queryClient } = renderWithClient(<DashboardPage />);
+    renderWithClient(<DashboardPage />);
 
     // Wait for initial render with IDLE status
     await screen.findByRole("button", { name: /sync library/i });
