@@ -6,7 +6,7 @@ A web application built with Next.js and TypeScript.
 
 - **Dev:** `npm run dev`
 - **Build:** `npm run build`
-- **Test:** `TODO`
+- **Test:** `npm test`
 - **Lint:** `npm run lint`
 - **Typecheck:** `npx tsc --noEmit`
 
@@ -15,4 +15,9 @@ A web application built with Next.js and TypeScript.
 For project documentation, see `.personal/docs/INDEX.md`.
 
 ## Architecture
-TODO: Add 3-5 key architectural rules once established
+
+- **Monolith**: Everything lives in one Next.js app — no microservices, no separate API server.
+- **tRPC for all API communication**: No raw API routes for app logic. Auth routes (`/api/auth/[...all]`) are the only exception.
+- **Prisma for schema, Kysely for queries**: Prisma owns migrations and type generation. All runtime queries go through Kysely with `CamelCasePlugin`.
+- **Repositories own data access**: No direct DB calls from routers or services. All queries go through `src/repositories/`.
+- **Protected by default**: Middleware redirects unauthenticated users. Only routes in the public list (`/`, `/login`, `/api/auth/*`, `/api/trpc/*`, `/vibe/*`) are open.
