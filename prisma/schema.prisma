@@ -1,0 +1,128 @@
+generator kysely {
+  provider     = "prisma-kysely"
+  output       = "../src/db"
+  fileName     = "types.ts"
+  enumFileName = "enums.ts"
+  camelCase    = true
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Auth models — managed by Better Auth (https://www.better-auth.com/)
+
+model User {
+  id            String     @id
+  name          String
+  email         String     @unique
+  emailVerified Boolean    @default(false) @map("email_verified")
+  image         String?
+  tier          UserTier   @default(FREE)
+  songCount     Int        @default(0) @map("song_count")
+  needsReauth   Boolean    @default(false) @map("needs_reauth")
+  lastSyncedAt  DateTime?  @map("last_synced_at")
+  accounts      Account[]
+  sessions      Session[]
+  songs         Song[]
+  playlists     Playlist[]
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  @@map("user")
+}
+
+model Account {
+  id                    String    @id
+  userId                String    @map("user_id")
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Session {
+  id        String   @id
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// Application models
+
+enum UserTier {
+  FREE
+  STANDARD
+  POWER
+}
+
+model Song {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  spotifyId   String   @map("spotify_id")
+  name        String
+  artist      String
+  album       String
+  albumArtUrl String?  @map("album_art_url")
+  lastfmGenres String? @map("lastfm_genres")
+  bpm         Int?
+  era         String?
+  addedAt     DateTime @map("added_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, spotifyId])
+  @@index([userId])
+  @@map("song")
+}
+
+model Playlist {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  spotifyPlaylistId String?   @map("spotify_playlist_id")
+  vibeName          String    @map("vibe_name")
+  vibeDescription   String?   @map("vibe_description")
+  seedSongIds       String[]  @map("seed_song_ids")
+  artImageUrl       String?   @map("art_image_url")
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("playlist")
+}
