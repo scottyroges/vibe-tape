@@ -46,14 +46,14 @@ vi.mock("@/lib/db", () => ({
 
 import { userRepository } from "./user.repository";
 
-describe("userRepository.updateSyncStatus", () => {
+describe("userRepository.updateSyncMetrics", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCountExecuteTakeFirstOrThrow.mockResolvedValue({ count: 42 });
   });
 
   it("counts liked songs and updates user record", async () => {
-    await userRepository.updateSyncStatus("user-1");
+    await userRepository.updateSyncMetrics("user-1");
 
     expect(mockSelectFrom).toHaveBeenCalledWith("likedSong");
     expect(mockCountWhere).toHaveBeenCalledWith("userId", "=", "user-1");

@@ -1,8 +1,10 @@
 # Liked Songs Ingestion + Storage
 
-**Status:** In Progress
+**Status:** Complete (all 5 phases done)
 **Created:** 2026-03-21
 **Goal:** Fetch a user's liked songs from Spotify, store them in the database, and expose a manual sync action via tRPC so the dashboard can trigger ingestion. Sync runs as a background job via Inngest to avoid Vercel function timeouts.
+
+**Current state (2026-03-21):** All phases implemented and merged except the latest commit (sync status tracking + dashboard improvements) which is staged but not yet committed on `feat/library-trpc-router`. Inngest is deployed to production via Vercel integration. The `INNGEST_SERVE_ORIGIN` env var is set for production; manual sync was required to get the initial app registered in Inngest Cloud.
 
 ---
 
@@ -76,7 +78,7 @@ Background job that orchestrates token refresh → Spotify fetch → DB storage 
   - Step 4 (`update-status`): Call `userRepository.updateSyncStatus(userId)`
   - Steps are independently retryable — a failure in upsert doesn't re-fetch from Spotify
   - Configure: 3 retries per step
-  - Use Inngest idempotency key (`userId`) with a short concurrency window to prevent duplicate syncs if user clicks the button twice
+  - Concurrency limit of 1 per userId prevents parallel syncs
 - [x] Register function in `src/app/api/inngest/route.ts`
 - [x] Add tests for the function (mock steps)
 
@@ -93,11 +95,14 @@ Expose sync via tRPC and add a button to the dashboard.
   - `list` query — calls `trackRepository.findByUserId(userId)`, returns tracks
   - `count` query — calls `trackRepository.countByUserId(userId)`
 - [x] Register library router in `src/server/routers/_app.ts`
+- [x] Add `syncStatus` query — returns user's current sync status (`IDLE`, `SYNCING`, `FAILED`)
 - [x] Add "Sync Library" button to dashboard page
   - Call `trpc.library.sync.useMutation()` on click
-  - Show "Syncing..." state (optimistic — job runs in background)
-  - Display song count (poll `trpc.library.count` or refresh on next page load)
-- [x] Add router tests
+  - Show "Syncing..." state driven by real `syncStatus` polling (every 2s while syncing)
+  - Display song count, refresh automatically when sync completes
+  - Disable button while sync is in progress (server-side check prevents duplicate syncs)
+  - Show error states for both sync failures and count query errors
+- [x] Add router and component tests
 
 **PR:** "Add library tRPC router and dashboard sync button"
 
@@ -115,7 +120,8 @@ Expose sync via tRPC and add a button to the dashboard.
 - **SpotifyLikedSong type** — the Spotify API client type was renamed from `LikedSong` to `SpotifyLikedSong` to avoid collision with the domain `LikedSong` type (the join table model).
 - **Token failure handling** — if `getValidToken` returns null, the Inngest step throws an error. After retries exhaust, job is marked failed in the Inngest dashboard. User sees stale song count and can retry.
 - **Pagination is a single Inngest step** — splitting into per-page steps would be more resilient but burns through the 50k/month free tier quickly (100 pages = 100 executions per sync). Instead, `fetchLikedSongs` handles 429 rate limits internally with retry-after backoff. If the step fails entirely, Inngest retries the whole fetch — acceptable at MVP scale.
-- **Concurrent sync prevention** — use Inngest's idempotency key on `userId` so multiple clicks don't spawn parallel jobs.
+- **Concurrent sync prevention** — concurrency limit of 1 per userId in Inngest, plus server-side `syncStatus` check in the tRPC mutation. Idempotency key was removed because it blocked intentional re-syncs within the 24h dedup window.
+- **Sync status tracking** — `syncStatus` enum (`IDLE`, `SYNCING`, `FAILED`) on the `user` table. Set to `SYNCING` at function start, `IDLE` on success, `FAILED` on error. Dashboard polls every 2s while syncing.
 - **Spotify rate limiting** — handled inside `fetchLikedSongs` with retry-after backoff on 429 responses, not at the Inngest step level.
 - **Inngest Dev Server via Docker** — runs as a docker-compose service alongside Postgres rather than a separate `npx inngest-cli dev` process. One `docker compose up` starts all infrastructure. The container uses `host.docker.internal` to reach the Next.js dev server on the host.
 

@@ -1,4 +1,5 @@
 export type UserTier = "FREE" | "STANDARD" | "POWER";
+export type SyncStatus = "IDLE" | "SYNCING" | "FAILED";
 
 export type User = {
   id: string;
@@ -8,6 +9,7 @@ export type User = {
   image: string | null;
   tier: UserTier;
   songCount: number;
+  syncStatus: SyncStatus;
   needsReauth: boolean;
   lastSyncedAt: Date | null;
   createdAt: Date;

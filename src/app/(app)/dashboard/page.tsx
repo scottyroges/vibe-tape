@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useTRPC } from "@/lib/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import styles from "./dashboard.module.css";
@@ -10,13 +11,33 @@ export default function DashboardPage() {
 
   const countQuery = useQuery(trpc.library.count.queryOptions());
 
+  const syncStatusQuery = useQuery({
+    ...trpc.library.syncStatus.queryOptions(),
+    refetchInterval: (query) => {
+      return query.state.data?.status === "SYNCING" ? 2000 : false;
+    },
+  });
+
+  const isSyncing = syncStatusQuery.data?.status === "SYNCING";
+
   const syncMutation = useMutation(
     trpc.library.sync.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: trpc.library.count.queryKey() });
+        queryClient.setQueryData(trpc.library.syncStatus.queryKey(), { status: "SYNCING" });
       },
     })
   );
+
+  // When sync status transitions from SYNCING to IDLE, refresh the count
+  const prevStatusRef = useRef(syncStatusQuery.data?.status);
+  useEffect(() => {
+    const currentStatus = syncStatusQuery.data?.status;
+    if (prevStatusRef.current === "SYNCING" && currentStatus === "IDLE") {
+      queryClient.invalidateQueries({ queryKey: trpc.library.count.queryKey() });
+      syncMutation.reset();
+    }
+    prevStatusRef.current = currentStatus;
+  }, [syncStatusQuery.data?.status]);
 
   return (
     <div className={styles.container}>
@@ -32,13 +53,20 @@ export default function DashboardPage() {
         <button
           className={styles.syncButton}
           onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending}
+          disabled={isSyncing || syncMutation.isPending}
         >
-          {syncMutation.isPending ? "Syncing..." : "Sync Library"}
+          {isSyncing
+            ? "Syncing..."
+            : syncMutation.isPending
+              ? "Starting..."
+              : "Sync Library"}
         </button>
       </div>
+      {syncStatusQuery.data?.status === "FAILED" && (
+        <p className={styles.error}>Last sync failed. Try again.</p>
+      )}
       {syncMutation.isError && (
-        <p className={styles.error}>Sync failed. Please try again.</p>
+        <p className={styles.error}>Could not start sync. Please try again.</p>
       )}
     </div>
   );

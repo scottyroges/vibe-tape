@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockSend, mockFindByUserId, mockCountByUserId } = vi.hoisted(() => ({
+const { mockSend, mockFindByUserId, mockCountByUserId, mockGetSyncStatus, mockTrySetSyncing } = vi.hoisted(() => ({
   mockSend: vi.fn().mockResolvedValue(undefined),
   mockFindByUserId: vi.fn(),
   mockCountByUserId: vi.fn(),
+  mockGetSyncStatus: vi.fn(),
+  mockTrySetSyncing: vi.fn(),
 }));
 
 vi.mock("@/lib/inngest", () => ({
@@ -14,6 +16,13 @@ vi.mock("@/repositories/track.repository", () => ({
   trackRepository: {
     findByUserId: mockFindByUserId,
     countByUserId: mockCountByUserId,
+  },
+}));
+
+vi.mock("@/repositories/user.repository", () => ({
+  userRepository: {
+    getSyncStatus: mockGetSyncStatus,
+    trySetSyncing: mockTrySetSyncing,
   },
 }));
 
@@ -41,18 +50,31 @@ function authedCaller(userId = "user-1") {
 describe("libraryRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSyncStatus.mockResolvedValue("IDLE");
+    mockTrySetSyncing.mockResolvedValue(true);
   });
 
   describe("sync", () => {
-    it("sends library/sync.requested event and returns started", async () => {
+    it("sends event and returns started when idle", async () => {
       const caller = authedCaller();
       const result = await caller.library.sync();
 
       expect(result).toEqual({ status: "started" });
+      expect(mockTrySetSyncing).toHaveBeenCalledWith("user-1");
       expect(mockSend).toHaveBeenCalledWith({
         name: "library/sync.requested",
         data: { userId: "user-1" },
       });
+    });
+
+    it("returns already_syncing when sync is in progress", async () => {
+      mockTrySetSyncing.mockResolvedValue(false);
+
+      const caller = authedCaller();
+      const result = await caller.library.sync();
+
+      expect(result).toEqual({ status: "already_syncing" });
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 
@@ -80,6 +102,18 @@ describe("libraryRouter", () => {
 
       expect(result).toEqual({ count: 42 });
       expect(mockCountByUserId).toHaveBeenCalledWith("user-1");
+    });
+  });
+
+  describe("syncStatus", () => {
+    it("returns current sync status", async () => {
+      mockGetSyncStatus.mockResolvedValue("SYNCING");
+
+      const caller = authedCaller();
+      const result = await caller.library.syncStatus();
+
+      expect(result).toEqual({ status: "SYNCING" });
+      expect(mockGetSyncStatus).toHaveBeenCalledWith("user-1");
     });
   });
 });
