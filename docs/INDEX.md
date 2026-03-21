@@ -24,6 +24,7 @@
 - **006 Testing strategy:** .personal/docs/decisions/006-testing-strategy.md
 - **007 Turbopack dev only:** .personal/docs/decisions/007-turbopack-dev-only.md
 - **008 Prisma + Kysely:** .personal/docs/decisions/008-query-layer-prisma-kysely.md
+- **009 Async job processing:** .personal/docs/decisions/009-async-job-processing.md
 
 ## Work Plans
 
