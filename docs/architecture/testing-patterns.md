@@ -9,7 +9,7 @@ This document covers testing conventions used in Vibe Tape.
 Tests should follow the same import patterns as production code.
 
 ```typescript
-import type { Song } from "@/domain/song";
+import type { Track, LikedSong } from "@/domain/song";
 import type { Playlist } from "@/domain/playlist";
 ```
 
@@ -127,14 +127,14 @@ Use `vi.hoisted()` for mock functions referenced in `vi.mock()` factory:
 ```typescript
 // ✅ Correct — hoisted
 const mockCreate = vi.hoisted(() => vi.fn());
-vi.mock("@/repositories/song.repository", () => ({
-  songRepository: { create: mockCreate },
+vi.mock("@/repositories/track.repository", () => ({
+  trackRepository: { findByIds: mockFindByIds },
 }));
 
 // ❌ Wrong — factory is hoisted, but variable isn't
-const mockCreate = vi.fn(); // Not hoisted!
-vi.mock("@/repositories/song.repository", () => ({
-  songRepository: { create: mockCreate }, // ReferenceError at runtime
+const mockFindByIds = vi.fn(); // Not hoisted!
+vi.mock("@/repositories/track.repository", () => ({
+  trackRepository: { findByIds: mockFindByIds }, // ReferenceError at runtime
 }));
 ```
 
@@ -165,10 +165,10 @@ vi.mock("server-only", () => ({}));
 const { db, executeTakeFirstOrThrow } = createMockDb();
 vi.mock("@/lib/db", () => ({ db }));
 
-it("finds song by id", async () => {
-  executeTakeFirstOrThrow.mockResolvedValue({ id: "s1", name: "Midnight City" });
-  const result = await songRepository.findById("s1");
-  expect(result.name).toBe("Midnight City");
+it("finds track by id", async () => {
+  executeTakeFirstOrThrow.mockResolvedValue({ id: "t1", name: "Midnight City" });
+  const result = await trackRepository.findByIds(["t1"]);
+  expect(result[0].name).toBe("Midnight City");
 });
 ```
 

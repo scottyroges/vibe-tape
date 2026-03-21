@@ -29,4 +29,22 @@ export const userRepository = {
       .selectAll()
       .execute();
   },
+
+  async updateSyncStatus(userId: string): Promise<void> {
+    const { count } = await db
+      .selectFrom("likedSong")
+      .where("userId", "=", userId)
+      .select(db.fn.countAll<number>().as("count"))
+      .executeTakeFirstOrThrow();
+
+    await db
+      .updateTable("user")
+      .set({
+        songCount: count,
+        lastSyncedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where("id", "=", userId)
+      .execute();
+  },
 };

@@ -22,8 +22,19 @@ export function createMockDb() {
 
   const builder: Record<string, unknown> = {};
 
+  const fn = {
+    countAll: () => ({
+      as: () => "count_placeholder",
+    }),
+  };
+
   const handler: ProxyHandler<Record<string, unknown>> = {
     get(_target, prop) {
+      if (prop === "fn") return fn;
+      if (prop === "transaction")
+        return () => ({
+          execute: async (cb: (trx: unknown) => Promise<void>) => cb(proxy),
+        });
       if (prop === "execute") return execute;
       if (prop === "executeTakeFirst") return executeTakeFirst;
       if (prop === "executeTakeFirstOrThrow") return executeTakeFirstOrThrow;

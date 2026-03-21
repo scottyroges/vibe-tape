@@ -26,7 +26,7 @@ model User {
   lastSyncedAt  DateTime?  @map("last_synced_at")
   accounts      Account[]
   sessions      Session[]
-  songs         Song[]
+  likedSongs    LikedSong[]
   playlists     Playlist[]
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
@@ -89,25 +89,35 @@ enum UserTier {
   POWER
 }
 
-model Song {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  spotifyId   String   @map("spotify_id")
-  name        String
-  artist      String
-  album       String
-  albumArtUrl String?  @map("album_art_url")
-  lastfmGenres String? @map("lastfm_genres")
-  bpm         Int?
-  era         String?
-  addedAt     DateTime @map("added_at")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+model Track {
+  id           String      @id @default(cuid())
+  spotifyId    String      @unique @map("spotify_id")
+  name         String
+  artist       String
+  album        String
+  albumArtUrl  String?     @map("album_art_url")
+  lastfmGenres String?     @map("lastfm_genres")
+  bpm          Int?
+  era          String?
+  likedSongs   LikedSong[]
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
 
-  @@unique([userId, spotifyId])
+  @@map("track")
+}
+
+model LikedSong {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  trackId   String   @map("track_id")
+  addedAt   DateTime @map("added_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, trackId])
   @@index([userId])
-  @@map("song")
+  @@map("liked_song")
 }
 
 model Playlist {

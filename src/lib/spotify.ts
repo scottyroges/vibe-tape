@@ -16,7 +16,7 @@ type SpotifyPaginatedResponse = {
   next: string | null;
 };
 
-export type LikedSong = {
+export type SpotifyLikedSong = {
   spotifyId: string;
   name: string;
   artist: string;
@@ -25,7 +25,7 @@ export type LikedSong = {
   addedAt: Date;
 };
 
-export function mapTrack(item: SpotifyLikedTrackItem): LikedSong {
+export function mapTrack(item: SpotifyLikedTrackItem): SpotifyLikedSong {
   return {
     spotifyId: item.track.id,
     name: item.track.name,
@@ -42,9 +42,9 @@ function sleep(ms: number): Promise<void> {
 
 export async function fetchLikedSongs(
   accessToken: string
-): Promise<LikedSong[]> {
+): Promise<SpotifyLikedSong[]> {
   const MAX_RATE_LIMIT_RETRIES = 3;
-  const songs: LikedSong[] = [];
+  const songs: SpotifyLikedSong[] = [];
   let url: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
   let rateLimitRetries = 0;
 

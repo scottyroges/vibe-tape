@@ -4,9 +4,10 @@
 
 ```
 User
-├── Song (user's liked songs from Spotify)
+├── LikedSong (user↔track join table)
+│   └── Track (one row per unique Spotify track)
 └── Playlist (generated vibe playlists)
-    └── seedSongIds[] (references to Songs that seeded this playlist)
+    └── seedSongIds[] (references to Tracks that seeded this playlist)
 
 Future:
 ├── GroupSession (multiple users pool libraries)
@@ -24,15 +25,23 @@ Fields:
 - `needsReauth` — Set to `true` when Spotify refresh token is revoked. User must re-authenticate on next login.
 - `lastSyncedAt` — Timestamp of last successful library sync.
 
-### Song
-A single liked song from a user's Spotify library. Enriched with Last.fm metadata (Tier 2).
+### Track
+A unique Spotify track. Tracks are shared across users — multiple users can like the same track without duplicating metadata. Enriched with Last.fm metadata (Tier 2).
 
 Fields:
-- `spotifyId` — Spotify track ID. Unique per user (`@@unique([userId, spotifyId])`).
+- `spotifyId` — Spotify track ID. Globally unique (`@unique`).
 - `lastfmGenres` — Comma-separated genre tags from Last.fm (Tier 2).
 - `bpm` — Beats per minute from MusicBrainz (Tier 2).
 - `era` — Decade/era classification (Tier 2).
+
+### LikedSong
+Join table linking users to tracks. Represents a user's liked song on Spotify.
+
+Fields:
+- `userId` — References User.
+- `trackId` — References Track.
 - `addedAt` — When the user liked the song on Spotify (used for incremental sync).
+- Unique constraint on `(userId, trackId)`.
 
 ### Playlist
 A generated vibe playlist. Links to Spotify via `spotifyPlaylistId`.
