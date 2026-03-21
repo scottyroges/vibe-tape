@@ -68,7 +68,7 @@ Schema was normalized: `song` table replaced with `track` (one row per Spotify t
 
 Background job that orchestrates token refresh → Spotify fetch → DB storage using Inngest step functions.
 
-- [ ] Create `src/inngest/functions/sync-library.ts`
+- [x] Create `src/inngest/functions/sync-library.ts`
   - Event: `library/sync.requested` with `{ userId }` payload
   - Step 1 (`get-token`): Call `getValidToken(userId)` — if null, throw descriptive error so Inngest retries or marks failed
   - Step 2 (`fetch-songs`): Call `fetchLikedSongs(accessToken)` — full pagination in a single step. Rate limit 429s are handled internally by `fetchLikedSongs` with retry-after backoff. If the step fails entirely, Inngest retries it from the beginning (re-fetches all pages). This is acceptable for MVP — per-page steps would burn through the 50k/month free tier.
@@ -77,8 +77,8 @@ Background job that orchestrates token refresh → Spotify fetch → DB storage 
   - Steps are independently retryable — a failure in upsert doesn't re-fetch from Spotify
   - Configure: 3 retries per step
   - Use Inngest idempotency key (`userId`) with a short concurrency window to prevent duplicate syncs if user clicks the button twice
-- [ ] Register function in `src/app/api/inngest/route.ts`
-- [ ] Add tests for the function (mock steps)
+- [x] Register function in `src/app/api/inngest/route.ts`
+- [x] Add tests for the function (mock steps)
 
 **PR:** "Add library sync Inngest function"
 

@@ -188,6 +188,48 @@ describe("vibeService", () => {
 });
 ```
 
+### Testing Inngest Step Functions
+
+Inngest functions are tested by mocking `inngest.createFunction` to capture the handler, then invoking it directly with a mock `step` object. The mock step's `run` method executes callbacks immediately rather than going through Inngest's step machinery.
+
+```typescript
+vi.mock("@/lib/inngest", () => ({
+  inngest: {
+    createFunction: vi.fn((_opts, handler) => ({ handler, _opts })),
+  },
+}));
+
+import { syncLibrary } from "./sync-library";
+
+function createMockStep() {
+  return {
+    run: vi.fn(async (_name: string, fn: () => Promise<unknown>) => fn()),
+  };
+}
+
+const handler = (syncLibrary as unknown as { handler: Function }).handler;
+const step = createMockStep();
+const event = { data: { userId: "user-1" } };
+
+await handler({ event, step });
+
+// Assert step order and dependency calls
+expect(step.run.mock.calls[0]![0]).toBe("get-token");
+expect(step.run.mock.calls[1]![0]).toBe("fetch-songs");
+```
+
+**Key detail:** Inngest serializes step outputs to JSON between steps, so `Date` objects become strings. Functions must rehydrate dates before passing to repositories. Test this explicitly:
+
+```typescript
+it("rehydrates Date fields before upserting", async () => {
+  // fetchLikedSongs returns addedAt as ISO string (simulating serialization)
+  mockFetchLikedSongs.mockResolvedValue([{ addedAt: "2024-06-15T00:00:00.000Z", ... }]);
+  await handler({ event, step });
+  const upsertedSongs = mockUpsertMany.mock.calls[0]![1];
+  expect(upsertedSongs[0].addedAt).toBeInstanceOf(Date);
+});
+```
+
 ### Environment Variable Stubs for Transitive Dependencies
 
 `src/server/auth.ts` is imported by the tRPC context, which is imported by every router test. Any env vars required by `auth.ts` must be stubbed in all router tests:
