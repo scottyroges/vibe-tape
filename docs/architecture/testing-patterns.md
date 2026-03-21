@@ -1,0 +1,204 @@
+# Testing Patterns
+
+This document covers testing conventions used in Vibe Tape.
+
+## General Patterns
+
+### Test Imports Follow Production Patterns
+
+Tests should follow the same import patterns as production code.
+
+```typescript
+import type { Song } from "@/domain/song";
+import type { Playlist } from "@/domain/playlist";
+```
+
+## Frontend Testing Patterns
+
+### Mocking Better Auth Client
+
+Better Auth client methods return `{ data, error }` instead of throwing exceptions. Mock implementations must match this signature.
+
+**Correct:**
+
+```typescript
+const mockSignOut = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/auth-client", () => ({
+  authClient: {
+    signOut: mockSignOut,
+  },
+}));
+
+// Success case
+mockSignOut.mockResolvedValueOnce({ data: {}, error: null });
+
+// Error case
+mockSignOut.mockResolvedValueOnce({
+  data: null,
+  error: { message: "Session expired", status: 401 },
+});
+```
+
+**Why:**
+- Better Auth uses result objects, not exceptions
+- Production code checks `result.error`, not try/catch
+- Tests must match the actual API contract
+
+### Test Visible Behavior
+
+Write tests that verify what users see and experience, not internal implementation details.
+
+**Good Tests:**
+
+```typescript
+it("shows playlist name after generation", async () => {
+  render(<GenerateForm {...props} />);
+  await user.click(screen.getByRole("button", { name: /generate/i }));
+  expect(screen.getByText("Late Night Drive")).toBeInTheDocument();
+});
+```
+
+**Brittle Tests (avoid):**
+
+```typescript
+// Don't test CSS module class names — they're transformed
+it("applies correct CSS class", () => {
+  const { container } = render(<SongCard name="Test" />);
+  const card = container.querySelector(".songCard"); // Will fail
+});
+```
+
+## Testing with React Query
+
+When testing components that use `useMutation`, provide a `QueryClientProvider` wrapper:
+
+```typescript
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+  Wrapper.displayName = "Wrapper";
+
+  return Wrapper;
+}
+
+render(<MyComponent />, { wrapper: createWrapper() });
+```
+
+## Backend Testing Patterns
+
+### Environment Directive
+
+Backend tests run in Node environment. Add the directive at the top:
+
+```typescript
+// @vitest-environment node
+import { describe, it, expect, vi } from "vitest";
+```
+
+### Mocking server-only Modules
+
+Tests must mock the `server-only` package to import server code:
+
+```typescript
+// @vitest-environment node
+vi.mock("server-only", () => ({}));
+
+// Now you can import server modules
+import { myServerFunction } from "@/server/my-module";
+```
+
+### Hoisted Mock Functions
+
+Use `vi.hoisted()` for mock functions referenced in `vi.mock()` factory:
+
+```typescript
+// ✅ Correct — hoisted
+const mockCreate = vi.hoisted(() => vi.fn());
+vi.mock("@/repositories/song.repository", () => ({
+  songRepository: { create: mockCreate },
+}));
+
+// ❌ Wrong — factory is hoisted, but variable isn't
+const mockCreate = vi.fn(); // Not hoisted!
+vi.mock("@/repositories/song.repository", () => ({
+  songRepository: { create: mockCreate }, // ReferenceError at runtime
+}));
+```
+
+### Testing Layers
+
+Different layers require different mocking strategies:
+
+**Router tests** (thin wrappers):
+```typescript
+const mockGenerate = vi.hoisted(() => vi.fn());
+vi.mock("@/services/vibe.service", () => ({
+  vibeService: { generate: mockGenerate },
+}));
+
+it("generate creates playlist from seed songs", async () => {
+  mockGenerate.mockResolvedValue({ id: "p1", vibeName: "Late Night Drive" });
+  const result = await caller.playlist.generate({ seedSongIds: ["s1", "s2"] });
+  expect(result.vibeName).toBe("Late Night Drive");
+});
+```
+
+**Repository tests** (data access):
+```typescript
+import { createMockDb } from "../helpers/mock-db";
+
+vi.mock("server-only", () => ({}));
+
+const { db, executeTakeFirstOrThrow } = createMockDb();
+vi.mock("@/lib/db", () => ({ db }));
+
+it("finds song by id", async () => {
+  executeTakeFirstOrThrow.mockResolvedValue({ id: "s1", name: "Midnight City" });
+  const result = await songRepository.findById("s1");
+  expect(result.name).toBe("Midnight City");
+});
+```
+
+### Dynamic Imports After Mocks
+
+Import the module under test AFTER setting up mocks:
+
+```typescript
+describe("vibeService", () => {
+  let vibeService: Awaited<typeof import("@/services/vibe.service")>["vibeService"];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const mod = await import("@/services/vibe.service");
+    vibeService = mod.vibeService;
+  });
+});
+```
+
+### Environment Variable Stubs for Transitive Dependencies
+
+`src/server/auth.ts` is imported by the tRPC context, which is imported by every router test. Any env vars required by `auth.ts` must be stubbed in all router tests:
+
+```typescript
+// @vitest-environment node
+vi.mock("server-only", () => ({}));
+
+const { db } = createMockDb();
+vi.mock("@/lib/db", () => ({ db }));
+
+vi.stubEnv("SPOTIFY_CLIENT_ID", "test-client-id");
+vi.stubEnv("SPOTIFY_CLIENT_SECRET", "test-client-secret");
+```
