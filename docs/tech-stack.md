@@ -76,28 +76,27 @@ Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). 
 | `sessions` | Managed by Better Auth — `id`, `user_id`, `expires_at`, `token` |
 | `songs` | `id`, `user_id`, `spotify_id`, `name`, `artist`, `album`, `album_art_url`, `lastfm_genres`, `bpm`, `era`, `added_at` |
 | `playlists` | `id`, `user_id`, `spotify_playlist_id`, `vibe_name`, `vibe_description`, `seed_song_ids`, `art_image_url`, `last_synced_at` |
-| `group_sessions` | `id`, `host_user_id`, `participant_ids`, `seed_song_ids`, `status`, `playlist_id`, `expires_at` |
-| `guest_passes` | `id`, `created_by_user_id`, `session_id`, `used_at`, `spotify_id` (null until used) |
+| `group_sessions` | `id`, `host_user_id`, `participant_ids`, `seed_song_ids`, `status`, `playlist_id`, `expires_at` | Tier 3 — not in schema yet |
+| `guest_passes` | `id`, `created_by_user_id`, `session_id`, `used_at`, `spotify_id` (null until used) | Tier 3 — not in schema yet |
 
 ---
 
-## API Routes
+## API Layer
 
-### Auth
-- `GET /api/auth/[...all]` — Better Auth handler (login, callback, session management)
+All app logic is exposed via tRPC procedures (see [ADR 002](decisions/002-trpc-api-layer.md)). The only raw API routes are auth handlers.
 
-### Spotify sync
-- `POST /api/sync/library` — ingest/refresh liked songs for current user
-- `POST /api/jobs/sync-all` — Vercel cron endpoint, protected by `CRON_SECRET` header
+### Raw routes
+- `GET/POST /api/auth/[...all]` — Better Auth handler (login, callback, session management)
+- `GET/POST /api/trpc/[trpc]` — tRPC fetch adapter
 
-### Playlist generation
-- `POST /api/playlists/generate` — takes `seed_song_ids[]`, calls Claude, scores library, creates Spotify playlist
-- `POST /api/playlists/[id]/refresh` — re-run generation with same seeds against updated library
+### tRPC routers (planned)
 
-### Group sessions
-- `POST /api/sessions` — create session, returns shareable code/link
-- `POST /api/sessions/[id]/join` — guest or user joins, triggers Spotify auth if needed
-- `POST /api/sessions/[id]/generate` — run generation across all participants' libraries
+| Router | Key procedures | Tier |
+|--------|---------------|------|
+| `health` | `ping` | Implemented |
+| `library` | `sync`, `list`, `search` | Tier 1 |
+| `playlist` | `generate`, `list`, `getById`, `refresh` | Tier 1 |
+| `session` | `create`, `join`, `generate` | Tier 3 |
 
 ---
 
