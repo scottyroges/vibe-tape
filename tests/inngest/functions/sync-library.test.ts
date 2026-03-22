@@ -7,21 +7,16 @@ const {
   mockUpsertMany,
   mockTrackFindStale,
   mockTrackFindStaleWithArtists,
-  mockTrackFindStaleWithPrimaryArtist,
   mockTrackUpdateDerivedEra,
   mockTrackUpdateClaudeClassification,
-  mockTrackUpdateLastfmTags,
   mockTrackSetEnrichmentVersion,
   mockArtistFindStale,
   mockArtistUpdateGenres,
-  mockArtistUpdateLastfmTags,
   mockArtistSetEnrichmentVersion,
   mockUpdateSyncStatus,
   mockSetSyncStatus,
   mockBuildClassifyPrompt,
   mockClassifyTracks,
-  mockGetArtistTopTags,
-  mockGetTrackTopTags,
 } = vi.hoisted(() => ({
   mockGetValidToken: vi.fn(),
   mockFetchLikedSongs: vi.fn(),
@@ -29,21 +24,16 @@ const {
   mockUpsertMany: vi.fn(),
   mockTrackFindStale: vi.fn(),
   mockTrackFindStaleWithArtists: vi.fn(),
-  mockTrackFindStaleWithPrimaryArtist: vi.fn(),
   mockTrackUpdateDerivedEra: vi.fn(),
   mockTrackUpdateClaudeClassification: vi.fn(),
-  mockTrackUpdateLastfmTags: vi.fn(),
   mockTrackSetEnrichmentVersion: vi.fn(),
   mockArtistFindStale: vi.fn(),
   mockArtistUpdateGenres: vi.fn(),
-  mockArtistUpdateLastfmTags: vi.fn(),
   mockArtistSetEnrichmentVersion: vi.fn(),
   mockUpdateSyncStatus: vi.fn(),
   mockSetSyncStatus: vi.fn(),
   mockBuildClassifyPrompt: vi.fn(),
   mockClassifyTracks: vi.fn(),
-  mockGetArtistTopTags: vi.fn(),
-  mockGetTrackTopTags: vi.fn(),
 }));
 
 vi.mock("@/lib/spotify-token", () => ({
@@ -55,15 +45,9 @@ vi.mock("@/lib/spotify", () => ({
   fetchArtists: mockFetchArtists,
 }));
 
-vi.mock("@/lib/lastfm", () => ({
-  getArtistTopTags: mockGetArtistTopTags,
-  getTrackTopTags: mockGetTrackTopTags,
-}));
-
 vi.mock("@/lib/enrichment", () => ({
   SPOTIFY_ENRICHMENT_VERSION: 1,
   CLAUDE_ENRICHMENT_VERSION: 1,
-  LASTFM_ENRICHMENT_VERSION: 1,
   deriveEra: (date: string | null) => {
     if (!date) return null;
     const year = parseInt(date.slice(0, 4), 10);
@@ -85,10 +69,8 @@ vi.mock("@/repositories/track.repository", () => ({
     upsertMany: mockUpsertMany,
     findStale: mockTrackFindStale,
     findStaleWithArtists: mockTrackFindStaleWithArtists,
-    findStaleWithPrimaryArtist: mockTrackFindStaleWithPrimaryArtist,
     updateDerivedEra: mockTrackUpdateDerivedEra,
     updateClaudeClassification: mockTrackUpdateClaudeClassification,
-    updateLastfmTags: mockTrackUpdateLastfmTags,
     setEnrichmentVersion: mockTrackSetEnrichmentVersion,
   },
 }));
@@ -97,7 +79,6 @@ vi.mock("@/repositories/artist.repository", () => ({
   artistRepository: {
     findStale: mockArtistFindStale,
     updateGenres: mockArtistUpdateGenres,
-    updateLastfmTags: mockArtistUpdateLastfmTags,
     setEnrichmentVersion: mockArtistSetEnrichmentVersion,
   },
 }));
@@ -125,6 +106,7 @@ function createMockStep() {
     run: vi.fn(
       async (_name: string, fn: () => Promise<unknown>) => fn()
     ),
+    sendEvent: vi.fn(),
   };
 }
 
@@ -153,20 +135,15 @@ function setupDefaultMocks() {
   // Enrichment defaults: no stale entities
   mockArtistFindStale.mockResolvedValue([]);
   mockArtistUpdateGenres.mockResolvedValue(undefined);
-  mockArtistUpdateLastfmTags.mockResolvedValue(undefined);
   mockArtistSetEnrichmentVersion.mockResolvedValue(0);
   mockTrackFindStale.mockResolvedValue([]);
   mockTrackFindStaleWithArtists.mockResolvedValue([]);
-  mockTrackFindStaleWithPrimaryArtist.mockResolvedValue([]);
   mockTrackUpdateDerivedEra.mockResolvedValue(undefined);
   mockTrackUpdateClaudeClassification.mockResolvedValue(undefined);
-  mockTrackUpdateLastfmTags.mockResolvedValue(undefined);
   mockTrackSetEnrichmentVersion.mockResolvedValue(0);
   mockFetchArtists.mockResolvedValue(new Map());
   mockBuildClassifyPrompt.mockReturnValue({ system: "sys", user: "usr" });
   mockClassifyTracks.mockResolvedValue({ results: [], inputTokens: 0, outputTokens: 0 });
-  mockGetArtistTopTags.mockResolvedValue([]);
-  mockGetTrackTopTags.mockResolvedValue([]);
 }
 
 describe("syncLibrary", () => {
@@ -196,17 +173,18 @@ describe("syncLibrary", () => {
       "fetch-songs-0",
       "upsert-data-0",
       "enrich-artists/spotify-genres-0",
-      "enrich-artists/lastfm-tags-0",
       "enrich-artists/set-spotify-version-0",
-      "enrich-artists/set-lastfm-version-0",
       "enrich-tracks/era-0",
       "enrich-tracks/claude-classify-0",
-      "enrich-tracks/lastfm-tags-0",
       "enrich-tracks/set-spotify-version-0",
       "enrich-tracks/set-claude-version-0",
-      "enrich-tracks/set-lastfm-version-0",
       "update-status",
     ]);
+
+    expect(step.sendEvent).toHaveBeenCalledWith(
+      "request-lastfm-enrichment",
+      { name: "enrichment/lastfm.requested", data: {} }
+    );
   });
 
   it("fetches and upserts multiple chunks when nextUrl is returned", async () => {
@@ -415,164 +393,14 @@ describe("syncLibrary", () => {
     expect(stepNames).toContain("enrich-tracks/claude-classify-500");
   });
 
-  it("enriches artists with Last.fm tags", async () => {
-    mockArtistFindStale
-      .mockResolvedValueOnce([]) // spotify-genres call
-      .mockResolvedValueOnce([   // lastfm-tags call
-        { id: "a1", spotifyId: "sa1", name: "Radiohead" },
-        { id: "a2", spotifyId: "sa2", name: "Aphex Twin" },
-      ]);
-
-    mockGetArtistTopTags
-      .mockResolvedValueOnce(["rock", "alternative", "indie"])
-      .mockResolvedValueOnce(["electronic", "ambient"]);
-
+  it("sends enrichment/lastfm.requested event after sync", async () => {
     const step = createMockStep();
     await handler({ event: { data: { userId: "user-1" } }, step });
 
-    expect(mockGetArtistTopTags).toHaveBeenCalledWith("Radiohead");
-    expect(mockGetArtistTopTags).toHaveBeenCalledWith("Aphex Twin");
-    expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "a1", tags: ["rock", "alternative", "indie"] },
-      { id: "a2", tags: ["electronic", "ambient"] },
-    ]);
-  });
-
-  it("enriches tracks with Last.fm tags", async () => {
-    mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
-      { id: "t1", name: "Creep", artist: "Radiohead" },
-      { id: "t2", name: "Windowlicker", artist: "Aphex Twin" },
-    ]);
-
-    mockGetTrackTopTags
-      .mockResolvedValueOnce(["alternative", "rock"])
-      .mockResolvedValueOnce(["electronic"]);
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    expect(mockGetTrackTopTags).toHaveBeenCalledWith("Radiohead", "Creep");
-    expect(mockGetTrackTopTags).toHaveBeenCalledWith("Aphex Twin", "Windowlicker");
-    expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "t1", tags: ["alternative", "rock"] },
-      { id: "t2", tags: ["electronic"] },
-    ]);
-  });
-
-  it("skips artists where Last.fm returns empty tags", async () => {
-    mockArtistFindStale
-      .mockResolvedValueOnce([]) // spotify-genres
-      .mockResolvedValueOnce([   // lastfm-tags
-        { id: "a1", spotifyId: "sa1", name: "Known Artist" },
-        { id: "a2", spotifyId: "sa2", name: "Unknown Artist" },
-      ]);
-
-    mockGetArtistTopTags
-      .mockResolvedValueOnce(["rock"])
-      .mockResolvedValueOnce([]); // no tags
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "a1", tags: ["rock"] },
-    ]);
-  });
-
-  it("skips tracks where Last.fm returns empty tags", async () => {
-    mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
-      { id: "t1", name: "Known Track", artist: "Artist" },
-      { id: "t2", name: "Unknown Track", artist: "Artist" },
-    ]);
-
-    mockGetTrackTopTags
-      .mockResolvedValueOnce(["rock"])
-      .mockResolvedValueOnce([]);
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "t1", tags: ["rock"] },
-    ]);
-  });
-
-  it("continues processing remaining artists when one Last.fm call fails", async () => {
-    mockArtistFindStale
-      .mockResolvedValueOnce([]) // spotify-genres
-      .mockResolvedValueOnce([   // lastfm-tags
-        { id: "a1", spotifyId: "sa1", name: "Failing Artist" },
-        { id: "a2", spotifyId: "sa2", name: "Good Artist" },
-      ]);
-
-    mockGetArtistTopTags
-      .mockRejectedValueOnce(new Error("Last.fm API error: 500 Internal Server Error"))
-      .mockResolvedValueOnce(["rock"]);
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "a2", tags: ["rock"] },
-    ]);
-  });
-
-  it("continues processing remaining tracks when one Last.fm call fails", async () => {
-    mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
-      { id: "t1", name: "Failing Track", artist: "Artist" },
-      { id: "t2", name: "Good Track", artist: "Artist" },
-    ]);
-
-    mockGetTrackTopTags
-      .mockRejectedValueOnce(new Error("Last.fm API error: 500 Internal Server Error"))
-      .mockResolvedValueOnce(["electronic"]);
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "t2", tags: ["electronic"] },
-    ]);
-  });
-
-  it("chunks Last.fm artist enrichment at 200 boundary", async () => {
-    const staleArtists = Array.from({ length: 200 }, (_, i) => ({
-      id: `a${i}`,
-      spotifyId: `sa${i}`,
-      name: `Artist ${i}`,
-    }));
-    mockArtistFindStale
-      .mockResolvedValueOnce([])           // spotify-genres
-      .mockResolvedValueOnce(staleArtists) // lastfm-tags chunk 0
-      .mockResolvedValueOnce([]);          // lastfm-tags chunk 1 (done)
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    const stepNames = step.run.mock.calls.map(
-      (call: unknown[]) => call[0]
+    expect(step.sendEvent).toHaveBeenCalledTimes(1);
+    expect(step.sendEvent).toHaveBeenCalledWith(
+      "request-lastfm-enrichment",
+      { name: "enrichment/lastfm.requested", data: {} }
     );
-    expect(stepNames).toContain("enrich-artists/lastfm-tags-0");
-    expect(stepNames).toContain("enrich-artists/lastfm-tags-200");
-  });
-
-  it("chunks Last.fm track enrichment at 200 boundary", async () => {
-    const staleTracks = Array.from({ length: 200 }, (_, i) => ({
-      id: `t${i}`,
-      name: `Song ${i}`,
-      artist: `Artist ${i}`,
-    }));
-    mockTrackFindStaleWithPrimaryArtist
-      .mockResolvedValueOnce(staleTracks)
-      .mockResolvedValueOnce([]);
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    const stepNames = step.run.mock.calls.map(
-      (call: unknown[]) => call[0]
-    );
-    expect(stepNames).toContain("enrich-tracks/lastfm-tags-0");
-    expect(stepNames).toContain("enrich-tracks/lastfm-tags-200");
   });
 });
