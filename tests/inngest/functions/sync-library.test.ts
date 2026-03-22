@@ -41,7 +41,7 @@ vi.mock("@/lib/inngest", () => ({
   },
 }));
 
-import { syncLibrary } from "./sync-library";
+import { syncLibrary } from "@/inngest/functions/sync-library";
 
 // Helper to simulate Inngest's step.run — just executes the callback immediately
 function createMockStep() {

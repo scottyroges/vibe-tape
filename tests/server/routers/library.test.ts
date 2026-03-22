@@ -35,7 +35,7 @@ vi.mock("@/server/auth", () => ({
 }));
 
 import { router, createCallerFactory } from "@/server/trpc";
-import { libraryRouter } from "./library";
+import { libraryRouter } from "@/server/routers/library";
 
 // Create a test caller with a fake authenticated context
 const createCaller = createCallerFactory(router({ library: libraryRouter }));
