@@ -62,6 +62,7 @@ src/
 │   ├── prompts/               # Prompt templates for Claude calls
 │   ├── auth-client.ts         # Better Auth React client
 │   ├── inngest.ts             # Inngest client singleton
+│   ├── lastfm.ts              # Last.fm API client (tag fetching, rate-limited)
 │   ├── spotify.ts             # Spotify API client (liked songs fetching)
 │   ├── spotify-token.ts       # Lazy Spotify token refresh
 │   └── trpc/                  # tRPC wiring
@@ -98,4 +99,4 @@ Middleware procedures in `server/trpc.ts`:
 
 **Domain (`domain/`)** — TypeScript types and interfaces shared across layers. No runtime code.
 
-**Lib (`lib/`)** — Thin wrappers around external SDKs and API clients (Anthropic SDK singleton, Claude classification client, Kysely database instance, Spotify token management, Spotify API client). Configuration, client instantiation, and low-level API interaction only. Also contains prompt templates (`lib/prompts/`) for structured Claude API calls. Also contains tRPC wiring: `lib/trpc/client.tsx` provides the React Query-backed tRPC client, `lib/trpc/server.ts` provides `serverTRPC()` for Server Components to call procedures directly without HTTP.
+**Lib (`lib/`)** — Thin wrappers around external SDKs and API clients (Anthropic SDK singleton, Claude classification client, Kysely database instance, Last.fm tag client, Spotify token management, Spotify API client). Configuration, client instantiation, and low-level API interaction only. Also contains prompt templates (`lib/prompts/`) for structured Claude API calls. Also contains tRPC wiring: `lib/trpc/client.tsx` provides the React Query-backed tRPC client, `lib/trpc/server.ts` provides `serverTRPC()` for Server Components to call procedures directly without HTTP.
