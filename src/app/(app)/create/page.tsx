@@ -35,13 +35,10 @@ export default function CreatePage() {
   const trpc = useTRPC();
   const router = useRouter();
   const listQuery = useQuery(trpc.library.list.queryOptions());
-  const scrollElementRef = useRef<HTMLElement | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    scrollElementRef.current = document.querySelector("[data-scroll-container]");
-  }, []);
+  const listWrapperRef = useRef<HTMLDivElement>(null);
 
   const songs = listQuery.data ?? [];
 
@@ -56,7 +53,7 @@ export default function CreatePage() {
   }, [songs, searchQuery]);
 
   useEffect(() => {
-    scrollElementRef.current?.scrollTo(0, 0);
+    listWrapperRef.current?.scrollTo(0, 0);
   }, [searchQuery]);
 
   const toggleSelection = useCallback((id: string) => {
@@ -73,7 +70,7 @@ export default function CreatePage() {
 
   const virtualizer = useVirtualizer({
     count: filteredSongs.length,
-    getScrollElement: () => scrollElementRef.current,
+    getScrollElement: () => listWrapperRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
   });
@@ -137,45 +134,47 @@ export default function CreatePage() {
           {selectedIds.size}/{MAX_SEEDS} selected
         </span>
       </div>
-      <div
-        className={styles.listContainer}
-        style={{ height: virtualizer.getTotalSize() }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const song = filteredSongs[virtualRow.index]!;
-          const isSelected = selectedIds.has(song.id);
-          return (
-            <div
-              key={song.id}
-              className={`${styles.row} ${isSelected ? styles.rowSelected : ""}`}
-              style={{
-                height: virtualRow.size,
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-              onClick={() => toggleSelection(song.id)}
-            >
-              {song.albumArtUrl ? (
-                <img
-                  className={styles.albumArt}
-                  src={song.albumArtUrl}
-                  alt=""
-                  loading="lazy"
-                />
-              ) : (
-                <div className={styles.albumArtPlaceholder}>
-                  <MusicNoteIcon />
+      <div ref={listWrapperRef} className={styles.listWrapper}>
+        <div
+          className={styles.listContainer}
+          style={{ height: virtualizer.getTotalSize() }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const song = filteredSongs[virtualRow.index]!;
+            const isSelected = selectedIds.has(song.id);
+            return (
+              <div
+                key={song.id}
+                className={`${styles.row} ${isSelected ? styles.rowSelected : ""}`}
+                style={{
+                  height: virtualRow.size,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                onClick={() => toggleSelection(song.id)}
+              >
+                {song.albumArtUrl ? (
+                  <img
+                    className={styles.albumArt}
+                    src={song.albumArtUrl}
+                    alt=""
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className={styles.albumArtPlaceholder}>
+                    <MusicNoteIcon />
+                  </div>
+                )}
+                <div className={styles.trackInfo}>
+                  <div className={styles.trackName}>{song.name}</div>
+                  <div className={styles.artistName}>{song.artist}</div>
                 </div>
-              )}
-              <div className={styles.trackInfo}>
-                <div className={styles.trackName}>{song.name}</div>
-                <div className={styles.artistName}>{song.artist}</div>
+                <div className={`${styles.checkmark} ${isSelected ? styles.checkmarkSelected : ""}`}>
+                  {isSelected && <CheckIcon />}
+                </div>
               </div>
-              <div className={`${styles.checkmark} ${isSelected ? styles.checkmarkSelected : ""}`}>
-                {isSelected && <CheckIcon />}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
       <div className={styles.footer}>
         <button

@@ -76,8 +76,9 @@ const makeSong = (overrides: Partial<{ id: string; name: string; artist: string;
 describe("CreatePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Ensure a <main> element exists for the virtualizer scroll container
     document.body.innerHTML = "";
+    // jsdom doesn't implement scrollTo
+    Element.prototype.scrollTo = vi.fn();
   });
 
   it("shows loading state while fetching", () => {

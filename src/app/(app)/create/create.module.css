@@ -3,6 +3,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .heading {
@@ -42,14 +43,11 @@
 }
 
 .toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 0;
-  background: var(--color-bg);
 }
 
 .searchInput {
@@ -70,6 +68,12 @@
   font-size: 0.875rem;
   color: var(--color-muted);
   white-space: nowrap;
+}
+
+.listWrapper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .listContainer {
@@ -115,10 +119,8 @@
 }
 
 .footer {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   padding: 0.75rem 0;
-  background: var(--color-bg);
 }
 
 .continueButton {
