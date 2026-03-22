@@ -1,6 +1,6 @@
 # Plan: Phase 3 — Claude Mood/Energy Classification
 
-**Status:** In Progress
+**Status:** Complete
 **Created:** 2026-03-22
 
 ## Goal
@@ -15,7 +15,7 @@ Phase 2 established the enrichment framework with version gating, chunked loops,
 
 - [x] PR 1: Schema migration + prompt template — `feat/claude-schema-prompt`
 - [x] PR 2: Claude client + repository methods — `feat/claude-client-repo`
-- [ ] PR 3: Wire step 6b + version bump — `feat/claude-classify-step`
+- [x] PR 3: Wire step 6b + version bump — `feat/claude-classify-step`
 
 PRs are sequential — each depends on the previous.
 
@@ -186,8 +186,16 @@ _All resolved during review:_
 - `docs/ideas/pricing-limit-playlists-not-songs.md` — **new** idea sketch
 - `docs/ideas/sample-cap-for-free-tier.md` — **new** idea sketch
 
+**PR 3 — `feat/claude-classify-step`:**
+- `src/inngest/functions/sync-library.ts` — replaced step 6b no-op with chunked Claude classification loop (500 tracks/step, 50/batch), per-track validation, token logging
+- `src/lib/enrichment.ts` — bumped `CURRENT_ENRICHMENT_VERSION` from 1 to 2
+- `tests/inngest/functions/sync-library.test.ts` — added mocks for Claude client/prompt/repo methods, updated step ordering, four new test cases
+- `tests/lib/enrichment.test.ts` — updated version assertion to 2
+
 ## Session Notes
 
 **2026-03-22 — PR 1 complete.** Schema migration adds four nullable columns (`claude_mood`, `claude_energy`, `claude_danceability`, `claude_vibe_tags`) to the track table. Prompt template module exports `buildClassifyPrompt` with types for track input and classification results. All existing tests updated with new fields. Parent enrichment plan updated to reflect String types over Float for energy/danceability.
 
 **2026-03-22 — PR 2 complete.** Claude API client module wraps the Anthropic SDK with JSON parsing, typed errors (`ClaudeParseError`), and token usage tracking. Uses Haiku 4.5 model. Two new repository methods support the classification step: `findStaleWithArtists` fetches tracks needing classification with artist names joined via STRING_AGG, and `updateClaudeClassification` writes mood/energy/danceability/vibeTags in a transaction. No retry logic in the client — Inngest step retries handle transient failures.
+
+**2026-03-22 — PR 3 complete. Phase 3 done.** Wired step 6b into the sync pipeline: chunked loop at 500 tracks/step, 50 tracks/batch for Claude calls, per-track validation (mood non-empty, energy/danceability in low/medium/high, vibeTags non-empty array), token logging per batch. Bumped `CURRENT_ENRICHMENT_VERSION` from 1 to 2, making all tracks stale so they flow through Claude classification on next sync. Steps 5a/6a re-run but are idempotent. All tests updated and four new test cases added (happy path, invalid response skipping, 500-track chunking boundary, version assertion).

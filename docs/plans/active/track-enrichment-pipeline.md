@@ -219,12 +219,12 @@ Add the version-gated enrichment framework and the first two enrichment sources:
 
 Implements **Step 6b (enrich-tracks/claude-classify)** in the sync pipeline.
 
-- [ ] **Prisma migration** — add to Track: `claudeMood` (String?), `claudeEnergy` (String?, "low"/"medium"/"high"), `claudeDanceability` (String?, "low"/"medium"/"high"), `claudeVibeTags` (String[]). String labels chosen over floats — simpler to prompt for and query.
-- [ ] **Prompt template** — `src/lib/prompts/classify-tracks.ts`. Exported function takes `{ name, artist }[]`, returns system + user prompt strings. Easy to iterate without touching calling code.
-- [ ] **Claude client** — `src/lib/claude.ts`. Calls Haiku with structured output (JSON mode). Handles retries.
-- [ ] **Step 6b implementation** — chunk 500 tracks/step, split into 10 Claude batches of 50. ~1,000 input + ~1,500 output tokens per batch. Parse and validate response, skip on parse errors. Bulk UPDATE per chunk.
-- [ ] **Cost guardrails** — log token counts per batch. Configurable `MAX_TRACKS_PER_ENRICHMENT_RUN`.
-- [ ] **Tests** — prompt snapshot, response parsing (valid/invalid/malformed), batch chunking, mocked Claude client
+- [x] **Prisma migration** — add to Track: `claudeMood` (String?), `claudeEnergy` (String?, "low"/"medium"/"high"), `claudeDanceability` (String?, "low"/"medium"/"high"), `claudeVibeTags` (String[]). String labels chosen over floats — simpler to prompt for and query.
+- [x] **Prompt template** — `src/lib/prompts/classify-tracks.ts`. Exported function takes `{ name, artist }[]`, returns system + user prompt strings. Easy to iterate without touching calling code.
+- [x] **Claude client** — `src/lib/claude.ts`. Calls Haiku with structured output (JSON mode). No retry logic — Inngest step retries handle transient failures.
+- [x] **Step 6b implementation** — chunk 500 tracks/step, split into 10 Claude batches of 50. Per-track validation (mood non-empty, energy/danceability in low/medium/high, vibeTags non-empty array). Bulk UPDATE per chunk.
+- [x] **Cost guardrails** — log token counts per batch. `MAX_TRACKS_PER_ENRICHMENT_RUN` deferred — cost is negligible at MVP scale.
+- [x] **Tests** — prompt snapshot, response parsing (valid/invalid/malformed), batch chunking, mocked Claude client
 
 **PR:** "Add Claude-powered mood and energy classification for tracks"
 
