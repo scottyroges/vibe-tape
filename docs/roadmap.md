@@ -10,8 +10,8 @@ The absolute minimum to validate the core mechanic. Goal: something real people 
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| 1 | Spotify OAuth | Better Auth genericOAuth plugin. Authorization Code flow. Store `access_token`, `refresh_token`, `expires_at` in Neon. | [ ] |
-| 2 | Liked songs ingestion + storage | Paginate `GET /me/tracks`. Store per user in DB. Free tier capped at 250 songs. | [ ] |
+| 1 | Spotify OAuth | Better Auth genericOAuth plugin. Authorization Code flow. Store `access_token`, `refresh_token`, `expires_at` in Neon. | [x] |
+| 2 | Liked songs ingestion + storage | Paginate `GET /me/tracks`. Store per user in DB. Free tier capped at 250 songs. | [x] |
 | 3 | Seed song picker UI | Searchable, mobile-first. Fast scroll through liked library. Highest-leverage UX investment. | [ ] |
 | 4 | Vibe analysis via Claude | Send 3–5 seed song names/artists to Claude. Return vibe name + descriptor + scoring criteria as JSON. | [ ] |
 | 5 | Playlist generation | Score stored library against vibe criteria. Push playlist back to Spotify via `POST /me/playlists`. | [ ] |
