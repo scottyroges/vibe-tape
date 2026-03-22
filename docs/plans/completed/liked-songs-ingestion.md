@@ -4,7 +4,7 @@
 **Created:** 2026-03-21
 **Goal:** Fetch a user's liked songs from Spotify, store them in the database, and expose a manual sync action via tRPC so the dashboard can trigger ingestion. Sync runs as a background job via Inngest to avoid Vercel function timeouts.
 
-**Current state (2026-03-21):** All phases implemented and merged except the latest commit (sync status tracking + dashboard improvements) which is staged but not yet committed on `feat/library-trpc-router`. Inngest is deployed to production via Vercel integration. The `INNGEST_SERVE_ORIGIN` env var is set for production; manual sync was required to get the initial app registered in Inngest Cloud.
+**Current state (2026-03-21):** All phases implemented and merged to main. Inngest is deployed to production via Vercel integration. The `INNGEST_SERVE_ORIGIN` env var is set for production; manual sync was required to get the initial app registered in Inngest Cloud.
 
 ---
 
