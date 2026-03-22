@@ -2,6 +2,12 @@
 
 This document covers testing conventions used in Vibe Tape.
 
+## File Placement
+
+Backend tests (`.test.ts`) live in `tests/` with a directory structure mirroring `src/`. For example, `src/repositories/track.repository.ts` is tested at `tests/repositories/track.repository.test.ts`. Backend tests import the module under test using `@/` path aliases, not relative imports.
+
+Frontend tests (`.test.tsx`) are colocated next to the component or page they test inside `src/`.
+
 ## General Patterns
 
 ### Test Imports Follow Production Patterns
@@ -199,7 +205,7 @@ vi.mock("@/lib/inngest", () => ({
   },
 }));
 
-import { syncLibrary } from "./sync-library";
+import { syncLibrary } from "@/inngest/functions/sync-library";
 
 function createMockStep() {
   return {
