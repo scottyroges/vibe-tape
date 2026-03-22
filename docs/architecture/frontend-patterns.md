@@ -112,7 +112,7 @@ Vibe Tape uses an app-shell pattern where the authenticated app area (`(app)` ro
 
 **Key principles:**
 - All pages under `(app)` scroll within `.main`, not at the viewport level
-- `.main` carries a `data-scroll-container` attribute so client components (e.g., virtualized lists) can locate the scroll element via `document.querySelector("[data-scroll-container]")` instead of coupling to a CSS class name
+- `.main` carries a `data-scroll-container` attribute as a generic hook for any client component that needs to locate the shell scroll element, though most pages prefer local scroll wrappers (see Virtualized Lists)
 - `.main` must be a flex column container so child layouts' `flex: 1` fills available space
 - Viewport units (`100svh`) are only used at the shell level
 - Child layouts use percentage-based heights relative to their parent
@@ -120,7 +120,7 @@ Vibe Tape uses an app-shell pattern where the authenticated app area (`(app)` ro
 
 ## Virtualized Lists
 
-Long lists (e.g., the liked library on `/create`) use `@tanstack/react-virtual` to render only visible rows. The virtualizer's `scrollElement` must point at the app-shell `<main>` container — not `window` — because pages scroll within that container (see Layout Patterns above). The page component locates it via `document.querySelector("[data-scroll-container]")` in a `useEffect` and stores it in a ref.
+Long lists (e.g., the liked library on `/create`) use `@tanstack/react-virtual` to render only visible rows. The virtualizer's `scrollElement` should be a local scroll wrapper `<div>` owned by the page component, referenced via `useRef`. This keeps the scroll context self-contained rather than coupling to the app-shell layout. The wrapper div handles its own `overflow-y: auto` and the page's outer container uses `overflow: hidden` to prevent double scrollbars.
 
 ## Client Component Queries
 

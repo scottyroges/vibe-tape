@@ -4,11 +4,12 @@ A web application built with Next.js and TypeScript.
 
 ## Commands
 
-- **Dev:** `npm run dev`
+- **Dev:** `npm run dev` — always use `http://127.0.0.1/` for local development URLs (not `localhost`)
 - **Build:** `npm run build`
 - **Test:** `npm test`
 - **Lint:** `npm run lint`
 - **Typecheck:** `npx tsc --noEmit`
+- **Env file:** Project uses `.env` (not `.env.local`). Prisma CLI only reads `.env`, so keep secrets there.
 
 ## Documentation
 
