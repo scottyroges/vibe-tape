@@ -4,7 +4,7 @@ import { createMockDb } from "../helpers/mock-db";
 
 vi.mock("server-only", () => ({}));
 
-const { db, execute, executeTakeFirstOrThrow, selectFrom, insertInto } =
+const { db, execute, executeTakeFirstOrThrow, selectFrom, insertInto, updateTable } =
   createMockDb();
 
 vi.mock("@/lib/db", () => ({ db }));
@@ -105,6 +105,45 @@ describe("trackRepository", () => {
 
       expect(result).toEqual(expected);
       expect(selectFrom).toHaveBeenCalledWith("track");
+    });
+  });
+
+  describe("updateDerivedEra", () => {
+    it("updates each track with derived era", async () => {
+      execute.mockResolvedValue([]);
+
+      await trackRepository.updateDerivedEra([
+        { id: "t1", derivedEra: "2020s" },
+        { id: "t2", derivedEra: "1990s" },
+      ]);
+
+      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it("does nothing for empty array", async () => {
+      await trackRepository.updateDerivedEra([]);
+
+      expect(updateTable).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("setEnrichmentVersion", () => {
+    it("updates tracks below target version and returns count", async () => {
+      execute.mockResolvedValue([{ numUpdatedRows: BigInt(10) }]);
+
+      const result = await trackRepository.setEnrichmentVersion(1, 1000);
+
+      expect(result).toBe(10);
+      expect(updateTable).toHaveBeenCalledWith("track");
+    });
+
+    it("returns 0 when no stale tracks", async () => {
+      execute.mockResolvedValue([{ numUpdatedRows: BigInt(0) }]);
+
+      const result = await trackRepository.setEnrichmentVersion(1, 1000);
+
+      expect(result).toBe(0);
     });
   });
 });

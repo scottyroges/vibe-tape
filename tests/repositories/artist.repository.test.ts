@@ -4,7 +4,7 @@ import { createMockDb } from "../helpers/mock-db";
 
 vi.mock("server-only", () => ({}));
 
-const { db, execute, selectFrom } = createMockDb();
+const { db, execute, selectFrom, updateTable } = createMockDb();
 
 vi.mock("@/lib/db", () => ({ db }));
 
@@ -30,6 +30,45 @@ describe("artistRepository", () => {
 
       expect(result).toEqual(expected);
       expect(selectFrom).toHaveBeenCalledWith("artist");
+    });
+  });
+
+  describe("updateGenres", () => {
+    it("updates each artist with genres", async () => {
+      execute.mockResolvedValue([]);
+
+      await artistRepository.updateGenres([
+        { id: "a1", spotifyGenres: ["pop", "rock"] },
+        { id: "a2", spotifyGenres: ["jazz"] },
+      ]);
+
+      expect(updateTable).toHaveBeenCalledWith("artist");
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it("does nothing for empty array", async () => {
+      await artistRepository.updateGenres([]);
+
+      expect(updateTable).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("setEnrichmentVersion", () => {
+    it("updates artists below target version and returns count", async () => {
+      execute.mockResolvedValue([{ numUpdatedRows: BigInt(5) }]);
+
+      const result = await artistRepository.setEnrichmentVersion(1, 1000);
+
+      expect(result).toBe(5);
+      expect(updateTable).toHaveBeenCalledWith("artist");
+    });
+
+    it("returns 0 when no stale artists", async () => {
+      execute.mockResolvedValue([{ numUpdatedRows: BigInt(0) }]);
+
+      const result = await artistRepository.setEnrichmentVersion(1, 1000);
+
+      expect(result).toBe(0);
     });
   });
 });
