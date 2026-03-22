@@ -1,6 +1,6 @@
 # Track Enrichment Pipeline
 
-**Status:** Not Started
+**Status:** Complete
 **Created:** 2026-03-21
 **Goal:** After library sync, enrich tracks with metadata from multiple sources (Spotify, Last.fm, Claude) to enable vibe-based playlist generation. The pipeline should be extensible — easy to add new data sources and re-enrich when sources or prompts improve.
 

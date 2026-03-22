@@ -34,6 +34,7 @@
 
 - **Active work plans:** .personal/docs/plans/active/
 - **Completed work plans:** .personal/docs/plans/completed/
+  - Track Enrichment Pipeline (parent plan): docs/plans/completed/track-enrichment-pipeline.md
   - Phase 1 — Artist Model + Expanded Spotify Data: .personal/docs/plans/completed/phase1-artist-model-spotify-data.md
   - Phase 2 — Enrichment Pipeline Foundation: .personal/docs/plans/completed/phase2-enrichment-pipeline-foundation.md
   - Phase 3 — Claude Mood/Energy Classification: docs/plans/completed/phase3-claude-classification.md
