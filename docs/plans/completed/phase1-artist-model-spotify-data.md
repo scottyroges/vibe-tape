@@ -1,6 +1,6 @@
 # Plan: Phase 1 — Artist Model + Expanded Spotify Data
 
-**Status:** In Progress
+**Status:** Done
 **Created:** 2026-03-22
 
 ## Goal
@@ -12,7 +12,7 @@ Since this is a solo project with only dev data, we use a destructive migration 
 ## Phases and PR Splits
 
 - [x] PR 1: Artist schema + Spotify extraction + repository updates — `feat/artist-model-spotify-data`
-- [ ] PR 2: Chunked sync pipeline + artist repository — `feat/chunked-sync-pipeline`
+- [x] PR 2: Chunked sync pipeline + artist repository — `feat/chunked-sync-pipeline`
 
 ---
 
@@ -119,4 +119,20 @@ _None — resolved during planning._
 
 ## Files Modified
 
+**PR 1** (merged via #22):
+- `prisma/schema.prisma`, migration SQL, `src/db/types.ts`
+- `src/domain/song.ts`, `src/domain/types.ts`
+- `src/lib/spotify.ts` — expanded extraction (popularity, duration, release date, structured artists)
+- `src/repositories/track.repository.ts` — upsertMany with artist handling, findByUserId with STRING_AGG
+- Tests: `spotify.test.ts`, `track.repository.test.ts`, `sync-library.test.ts`, `page.test.tsx` (create + confirm)
+
+**PR 2** (current branch `feat/chunked-sync-pipeline`):
+- `src/lib/spotify.ts` — `fetchLikedSongs` now accepts `{ startUrl, maxTracks }`, returns `{ songs, nextUrl }`
+- `src/inngest/functions/sync-library.ts` — chunked fetch/upsert loop (2000 songs per chunk, interleaved steps)
+- `src/repositories/artist.repository.ts` — new file, `findStale(version, limit)`
+- `src/repositories/track.repository.ts` — added `findStale(version, limit)`
+- Tests: `spotify.test.ts`, `sync-library.test.ts`, `artist.repository.test.ts`, `track.repository.test.ts`
+
 ## Session Notes
+
+Both PRs complete. Phase 1 foundation is in place: Artist model normalized, Spotify data expanded, sync pipeline chunked for memory-bounded processing, and `findStale` queries ready for Phase 2 enrichment.

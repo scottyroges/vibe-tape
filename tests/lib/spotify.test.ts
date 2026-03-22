@@ -101,21 +101,68 @@ describe("fetchLikedSongs", () => {
     vi.restoreAllMocks();
   });
 
-  it("fetches a single page of songs", async () => {
+  it("returns { songs, nextUrl } shape", async () => {
     const items = [makeSpotifyItem({ id: "s1" }), makeSpotifyItem({ id: "s2" })];
     vi.spyOn(global, "fetch").mockResolvedValueOnce(
       mockFetchResponse({ items, next: null })
     );
 
-    const songs = await fetchLikedSongs("test-token");
+    const result = await fetchLikedSongs("test-token");
 
-    expect(songs).toHaveLength(2);
-    expect(songs[0]!.spotifyId).toBe("s1");
-    expect(songs[1]!.spotifyId).toBe("s2");
+    expect(result.songs).toHaveLength(2);
+    expect(result.songs[0]!.spotifyId).toBe("s1");
+    expect(result.nextUrl).toBeNull();
+  });
+
+  it("uses default URL when no startUrl provided", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({ items: [], next: null })
+    );
+
+    await fetchLikedSongs("test-token");
+
     expect(global.fetch).toHaveBeenCalledWith(
       "https://api.spotify.com/v1/me/tracks?limit=50",
       { headers: { Authorization: "Bearer test-token" } }
     );
+  });
+
+  it("uses startUrl when provided", async () => {
+    const startUrl = "https://api.spotify.com/v1/me/tracks?offset=100&limit=50";
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({ items: [], next: null })
+    );
+
+    await fetchLikedSongs("test-token", { startUrl });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      startUrl,
+      { headers: { Authorization: "Bearer test-token" } }
+    );
+  });
+
+  it("stops after maxTracks and returns nextUrl", async () => {
+    // Each page has 50 items, maxTracks is 100 — should fetch 2 pages then stop
+    const page1 = Array.from({ length: 50 }, (_, i) => makeSpotifyItem({ id: `s${i}` }));
+    const page2 = Array.from({ length: 50 }, (_, i) => makeSpotifyItem({ id: `s${50 + i}` }));
+    const page3Url = "https://api.spotify.com/v1/me/tracks?offset=100&limit=50";
+
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          items: page1,
+          next: "https://api.spotify.com/v1/me/tracks?offset=50&limit=50",
+        })
+      )
+      .mockResolvedValueOnce(
+        mockFetchResponse({ items: page2, next: page3Url })
+      );
+
+    const result = await fetchLikedSongs("test-token", { maxTracks: 100 });
+
+    expect(result.songs).toHaveLength(100);
+    expect(result.nextUrl).toBe(page3Url);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it("paginates through multiple pages", async () => {
@@ -130,11 +177,10 @@ describe("fetchLikedSongs", () => {
         mockFetchResponse({ items: page2, next: null })
       );
 
-    const songs = await fetchLikedSongs("test-token");
+    const result = await fetchLikedSongs("test-token");
 
-    expect(songs).toHaveLength(2);
-    expect(songs[0]!.spotifyId).toBe("s1");
-    expect(songs[1]!.spotifyId).toBe("s2");
+    expect(result.songs).toHaveLength(2);
+    expect(result.nextUrl).toBeNull();
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -149,9 +195,9 @@ describe("fetchLikedSongs", () => {
         mockFetchResponse({ items, next: null })
       );
 
-    const songs = await fetchLikedSongs("test-token");
+    const result = await fetchLikedSongs("test-token");
 
-    expect(songs).toHaveLength(1);
+    expect(result.songs).toHaveLength(1);
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 

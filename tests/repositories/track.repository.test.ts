@@ -93,4 +93,18 @@ describe("trackRepository", () => {
       expect(insertInto).not.toHaveBeenCalled();
     });
   });
+
+  describe("findStale", () => {
+    it("queries tracks with enrichmentVersion below target", async () => {
+      const expected = [
+        { id: "t1", spotifyId: "s1", name: "Song 1", enrichmentVersion: 0 },
+      ];
+      execute.mockResolvedValue(expected);
+
+      const result = await trackRepository.findStale(1, 500);
+
+      expect(result).toEqual(expected);
+      expect(selectFrom).toHaveBeenCalledWith("track");
+    });
+  });
 });
