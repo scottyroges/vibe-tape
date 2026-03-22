@@ -43,11 +43,11 @@ Add search filtering and seed selection interactivity on top of the song list.
 
 Restructure the dashboard from a sync-focused page to the main hub: show existing vibe tapes and a prominent "Create New" button.
 
-- [ ] Move sync button to a secondary/settings position (still accessible, not the hero)
-- [ ] Add "Create New Vibe Tape" button — links to `/create`
-- [ ] Add placeholder section for existing vibe tapes (empty state for now — "No vibe tapes yet")
-- [ ] Keep song count visible
-- [ ] Add tests for updated dashboard layout
+- [x] Move sync button to a secondary/settings position (still accessible, not the hero)
+- [x] Add "Create New Vibe Tape" button — links to `/create`
+- [x] Add placeholder section for existing vibe tapes (empty state for now — "No vibe tapes yet")
+- [x] Keep song count visible
+- [x] Add tests for updated dashboard layout
 
 **PR:** "Refactor dashboard as vibe tape hub with create button"
 
