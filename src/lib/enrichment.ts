@@ -1,4 +1,4 @@
-export const CURRENT_ENRICHMENT_VERSION = 2;
+export const CURRENT_ENRICHMENT_VERSION = 3;
 
 /**
  * Derives a decade string from a Spotify release date.

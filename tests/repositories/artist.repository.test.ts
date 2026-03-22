@@ -53,6 +53,26 @@ describe("artistRepository", () => {
     });
   });
 
+  describe("updateLastfmTags", () => {
+    it("updates each artist with Last.fm tags in a transaction", async () => {
+      execute.mockResolvedValue([]);
+
+      await artistRepository.updateLastfmTags([
+        { id: "a1", lastfmTags: ["rock", "alternative"] },
+        { id: "a2", lastfmTags: ["electronic"] },
+      ]);
+
+      expect(updateTable).toHaveBeenCalledWith("artist");
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it("does nothing for empty array", async () => {
+      await artistRepository.updateLastfmTags([]);
+
+      expect(updateTable).not.toHaveBeenCalled();
+    });
+  });
+
   describe("setEnrichmentVersion", () => {
     it("updates artists below target version and returns count", async () => {
       execute.mockResolvedValue([{ numUpdatedRows: BigInt(5) }]);

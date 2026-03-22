@@ -25,6 +25,22 @@ export const artistRepository = {
     }
   },
 
+  async updateLastfmTags(
+    updates: { id: string; lastfmTags: string[] }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    await db.transaction().execute(async (trx) => {
+      const now = new Date();
+      for (const { id, lastfmTags } of updates) {
+        await trx
+          .updateTable("artist")
+          .set({ lastfmTags, updatedAt: now })
+          .where("id", "=", id)
+          .execute();
+      }
+    });
+  },
+
   async setEnrichmentVersion(
     version: number,
     limit: number

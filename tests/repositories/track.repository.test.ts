@@ -4,7 +4,7 @@ import { createMockDb } from "../helpers/mock-db";
 
 vi.mock("server-only", () => ({}));
 
-const { db, execute, executeTakeFirstOrThrow, selectFrom, insertInto, updateTable } =
+const { db, execute, executeTakeFirstOrThrow, selectFrom, insertInto, updateTable, where } =
   createMockDb();
 
 vi.mock("@/lib/db", () => ({ db }));
@@ -123,6 +123,41 @@ describe("trackRepository", () => {
 
     it("does nothing for empty array", async () => {
       await trackRepository.updateDerivedEra([]);
+
+      expect(updateTable).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("findStaleWithPrimaryArtist", () => {
+    it("queries tracks with primary artist join", async () => {
+      const expected = [
+        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1", enrichmentVersion: 0 },
+      ];
+      execute.mockResolvedValue(expected);
+
+      const result = await trackRepository.findStaleWithPrimaryArtist(1, 200);
+
+      expect(result).toEqual(expected);
+      expect(selectFrom).toHaveBeenCalledWith("track");
+      expect(where).toHaveBeenCalledWith("trackArtist.position", "=", 0);
+    });
+  });
+
+  describe("updateLastfmTags", () => {
+    it("updates each track with Last.fm tags in a transaction", async () => {
+      execute.mockResolvedValue([]);
+
+      await trackRepository.updateLastfmTags([
+        { id: "t1", lastfmTags: ["rock", "alternative"] },
+        { id: "t2", lastfmTags: ["electronic"] },
+      ]);
+
+      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it("does nothing for empty array", async () => {
+      await trackRepository.updateLastfmTags([]);
 
       expect(updateTable).not.toHaveBeenCalled();
     });

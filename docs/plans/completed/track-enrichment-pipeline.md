@@ -1,6 +1,6 @@
 # Track Enrichment Pipeline
 
-**Status:** Not Started
+**Status:** Complete
 **Created:** 2026-03-21
 **Goal:** After library sync, enrich tracks with metadata from multiple sources (Spotify, Last.fm, Claude) to enable vibe-based playlist generation. The pipeline should be extensible — easy to add new data sources and re-enrich when sources or prompts improve.
 
@@ -234,15 +234,15 @@ Implements **Step 6b (enrich-tracks/claude-classify)** in the sync pipeline.
 
 Implements **Step 5b (enrich-artists/lastfm-tags)** and **Step 6c (enrich-tracks/lastfm-tags)** in the sync pipeline.
 
-- [ ] **Last.fm API client** — `src/lib/lastfm.ts`
+- [x] **Last.fm API client** — `src/lib/lastfm.ts`
   - `getArtistTopTags(artist: string): Promise<string[]>` — for Step 5b
   - `getTrackTopTags(artist: string, track: string): Promise<string[]>` — for Step 6c
   - Both extract `toptags.tag[].name`, return empty array on 404/no tags
-- [ ] **API key** — add `LASTFM_API_KEY` to `.env`
-- [ ] **Rate limiter** — simple throttle, max 5 req/sec
-- [ ] **Step 5b implementation** — chunk 200 artists/step (~40s). Write `lastfmTags` on Artist.
-- [ ] **Step 6c implementation** — chunk 200 tracks/step (~40s). Write `lastfmTags` on Track.
-- [ ] **Tests** — mocked HTTP, tag extraction, 404 handling, rate limiting
+- [x] **API key** — add `LASTFM_API_KEY` to `.env`
+- [x] **Rate limiter** — simple throttle, max 5 req/sec
+- [x] **Step 5b implementation** — chunk 200 artists/step (~40s). Write `lastfmTags` on Artist.
+- [x] **Step 6c implementation** — chunk 200 tracks/step (~40s). Write `lastfmTags` on Track.
+- [x] **Tests** — mocked HTTP, tag extraction, 404 handling, rate limiting
 
 **PR:** "Add Last.fm genre enrichment for artists and tracks"
 

@@ -25,7 +25,7 @@ Add payments, metadata enrichment, and the AI art that makes sharing compelling.
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| 7 | Last.fm/MusicBrainz metadata enrichment | Fetch genre tags, BPM, era per track. Powers better matching without Spotify audio features. | [ ] |
+| 7 | Last.fm/MusicBrainz metadata enrichment | Fetch genre tags, BPM, era per track. Powers better matching without Spotify audio features. | [~] Last.fm done (Phases 1-4). BPM dropped (no source). MusicBrainz deferred. |
 | 8 | Free vs paid tier enforcement | 250 song cap for free. Generation limits enforced server-side. | [ ] |
 | 9 | Stripe integration | Standard ($10/yr) and Power ($25/yr) tiers. Free until revenue. | [ ] |
 | 10 | Auto-sync | Vercel cron nightly. Refresh liked songs pool + update active playlists. Lazy token refresh. | [ ] |
