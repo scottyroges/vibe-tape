@@ -1,6 +1,6 @@
 # Seed Song Picker UI
 
-**Status:** In Progress
+**Status:** Done
 **Created:** 2026-03-21
 **Goal:** Build a searchable, mobile-first song picker page where users select 3–5 seed songs from their liked library to start creating a vibe tape. Refactor the dashboard to show existing vibe tapes and a "Create New" CTA.
 
@@ -28,12 +28,12 @@ New route `/create` that displays the user's full liked library in a fast, scrol
 
 Add search filtering and seed selection interactivity on top of the song list.
 
-- [ ] Search/filter bar — client-side filter by song name and artist (instant on 1k+ items), sticky at top
-- [ ] Selection UI — tap to select/deselect, visual indicator (checkmark, highlight)
-- [ ] Selection constraints — min 3, max 5 seeds. Show count (e.g., "3/5 selected")
-- [ ] "Continue" button — disabled until 3+ selected, navigates to `/create/confirm?seeds=id1,id2,...` with selected track IDs as URL params
-- [ ] Create placeholder `/create/confirm` page — reads seed IDs from URL params, shows selected seed summary with "Coming soon" message (future: vibe analysis)
-- [ ] Add tests for search filtering, selection logic, and constraints
+- [x] Search/filter bar — client-side filter by song name and artist (instant on 1k+ items), sticky at top
+- [x] Selection UI — tap to select/deselect, visual indicator (checkmark, highlight)
+- [x] Selection constraints — min 3, max 5 seeds. Show count (e.g., "3/5 selected")
+- [x] "Continue" button — disabled until 3+ selected, navigates to `/create/confirm?seeds=id1,id2,...` with selected track IDs as URL params
+- [x] Create placeholder `/create/confirm` page — reads seed IDs from URL params, shows selected seed summary with "Coming soon" message (future: vibe analysis)
+- [x] Add tests for search filtering, selection logic, and constraints
 
 **PR:** "Add search and seed selection to song picker"
 
