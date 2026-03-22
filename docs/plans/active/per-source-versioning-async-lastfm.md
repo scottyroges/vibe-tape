@@ -1,6 +1,6 @@
 # Plan: Per-Source Enrichment Versioning, Async Last.fm & Vibe Profile
 
-**Status:** Not Started
+**Status:** In Progress
 **Created:** 2026-03-22
 
 ## Goal
@@ -314,12 +314,12 @@ export const enrichLastfm = inngest.createFunction(
 
 ## Phases and PR Splits
 
-- [ ] PR 1: Schema migration + enrichment constants — `feat/per-source-versions-schema`
-- [ ] PR 2: Update sync pipeline to per-source versioning — `feat/per-source-sync-pipeline`
+- [x] PR 1: Schema migration + enrichment constants + repository/sync pipeline updates — `feat/per-source-versions-schema`
+- [ ] ~~PR 2: Update sync pipeline to per-source versioning~~ — folded into PR 1
 - [ ] PR 3: Extract Last.fm into async function — `feat/async-lastfm-enrichment`
 - [ ] PR 4: Vibe profile derivation — `feat/vibe-profile`
 
-PRs are sequential — each depends on the previous.
+PR 1 absorbed the planned PR 2 scope (repository methods and sync pipeline updates). PRs 3 and 4 remain sequential.
 
 ---
 

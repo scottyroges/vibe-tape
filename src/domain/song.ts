@@ -4,17 +4,13 @@ export type Track = {
   name: string;
   album: string;
   albumArtUrl: string | null;
-  spotifyPopularity: number | null;
-  spotifyDurationMs: number | null;
-  spotifyReleaseDate: string | null;
-  derivedEra: string | null;
-  claudeMood: string | null;
-  claudeEnergy: string | null;
-  claudeDanceability: string | null;
-  claudeVibeTags: string[];
-  lastfmTags: string[];
-  enrichmentVersion: number;
-  enrichedAt: Date | null;
+  vibeMood: string | null;
+  vibeEnergy: string | null;
+  vibeDanceability: string | null;
+  vibeGenres: string[];
+  vibeTags: string[];
+  vibeVersion: number;
+  vibeUpdatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -33,10 +29,6 @@ export type Artist = {
   id: string;
   spotifyId: string;
   name: string;
-  spotifyGenres: string[];
-  lastfmTags: string[];
-  enrichmentVersion: number;
-  enrichedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -45,4 +37,45 @@ export type TrackArtist = {
   trackId: string;
   artistId: string;
   position: number;
+};
+
+export type TrackSpotifyEnrichment = {
+  trackId: string;
+  popularity: number | null;
+  durationMs: number | null;
+  releaseDate: string | null;
+  derivedEra: string | null;
+  version: number;
+  enrichedAt: Date | null;
+};
+
+export type TrackClaudeEnrichment = {
+  trackId: string;
+  mood: string | null;
+  energy: string | null;
+  danceability: string | null;
+  vibeTags: string[];
+  version: number;
+  enrichedAt: Date | null;
+};
+
+export type TrackLastfmEnrichment = {
+  trackId: string;
+  tags: string[];
+  version: number;
+  enrichedAt: Date | null;
+};
+
+export type ArtistSpotifyEnrichment = {
+  artistId: string;
+  genres: string[];
+  version: number;
+  enrichedAt: Date | null;
+};
+
+export type ArtistLastfmEnrichment = {
+  artistId: string;
+  tags: string[];
+  version: number;
+  enrichedAt: Date | null;
 };

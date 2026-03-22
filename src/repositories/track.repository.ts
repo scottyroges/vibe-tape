@@ -43,27 +43,29 @@ export const trackRepository = {
       .execute();
   },
 
-  async findStale(version: number, limit: number): Promise<Track[]> {
-    return db
+  async findStale(
+    version: number,
+    limit: number
+  ): Promise<(Track & { releaseDate: string | null })[]> {
+    const rows = await db
       .selectFrom("track")
-      .where("enrichmentVersion", "<", version)
-      .selectAll()
+      .leftJoin(
+        "trackSpotifyEnrichment",
+        "trackSpotifyEnrichment.trackId",
+        "track.id"
+      )
+      .where((eb) =>
+        eb.or([
+          eb("trackSpotifyEnrichment.version", "is", null),
+          eb("trackSpotifyEnrichment.version", "<", version),
+        ])
+      )
+      .selectAll("track")
+      .select("trackSpotifyEnrichment.releaseDate")
       .limit(limit)
       .execute();
-  },
 
-  async updateDerivedEra(
-    updates: { id: string; derivedEra: string }[]
-  ): Promise<void> {
-    if (updates.length === 0) return;
-    const now = new Date();
-    for (const { id, derivedEra } of updates) {
-      await db
-        .updateTable("track")
-        .set({ derivedEra, updatedAt: now })
-        .where("id", "=", id)
-        .execute();
-    }
+    return rows as (Track & { releaseDate: string | null })[];
   },
 
   async findStaleWithArtists(
@@ -74,7 +76,17 @@ export const trackRepository = {
       .selectFrom("track")
       .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
       .innerJoin("artist", "artist.id", "trackArtist.artistId")
-      .where("track.enrichmentVersion", "<", version)
+      .leftJoin(
+        "trackClaudeEnrichment",
+        "trackClaudeEnrichment.trackId",
+        "track.id"
+      )
+      .where((eb) =>
+        eb.or([
+          eb("trackClaudeEnrichment.version", "is", null),
+          eb("trackClaudeEnrichment.version", "<", version),
+        ])
+      )
       .selectAll("track")
       .select(
         sql<string>`string_agg(artist.name, ', ' order by track_artist.position)`.as(
@@ -96,7 +108,17 @@ export const trackRepository = {
       .selectFrom("track")
       .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
       .innerJoin("artist", "artist.id", "trackArtist.artistId")
-      .where("track.enrichmentVersion", "<", version)
+      .leftJoin(
+        "trackLastfmEnrichment",
+        "trackLastfmEnrichment.trackId",
+        "track.id"
+      )
+      .where((eb) =>
+        eb.or([
+          eb("trackLastfmEnrichment.version", "is", null),
+          eb("trackLastfmEnrichment.version", "<", version),
+        ])
+      )
       .where("trackArtist.position", "=", 0)
       .selectAll("track")
       .select("artist.name as artist")
@@ -106,17 +128,41 @@ export const trackRepository = {
     return rows as (Track & { artist: string })[];
   },
 
+  async updateDerivedEra(
+    updates: { id: string; derivedEra: string }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    const now = new Date();
+    for (const { id, derivedEra } of updates) {
+      await db
+        .insertInto("trackSpotifyEnrichment")
+        .values({ trackId: id, derivedEra, enrichedAt: now })
+        .onConflict((oc) =>
+          oc.column("trackId").doUpdateSet({
+            derivedEra: (eb) => eb.ref("excluded.derivedEra"),
+            enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+          })
+        )
+        .execute();
+    }
+  },
+
   async updateLastfmTags(
-    updates: { id: string; lastfmTags: string[] }[]
+    updates: { id: string; tags: string[] }[]
   ): Promise<void> {
     if (updates.length === 0) return;
     await db.transaction().execute(async (trx) => {
       const now = new Date();
-      for (const { id, lastfmTags } of updates) {
+      for (const { id, tags } of updates) {
         await trx
-          .updateTable("track")
-          .set({ lastfmTags, updatedAt: now })
-          .where("id", "=", id)
+          .insertInto("trackLastfmEnrichment")
+          .values({ trackId: id, tags, enrichedAt: now })
+          .onConflict((oc) =>
+            oc.column("trackId").doUpdateSet({
+              tags: (eb) => eb.ref("excluded.tags"),
+              enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+            })
+          )
           .execute();
       }
     });
@@ -125,39 +171,48 @@ export const trackRepository = {
   async updateClaudeClassification(
     updates: {
       id: string;
-      claudeMood: string;
-      claudeEnergy: string;
-      claudeDanceability: string;
-      claudeVibeTags: string[];
+      mood: string;
+      energy: string;
+      danceability: string;
+      vibeTags: string[];
     }[]
   ): Promise<void> {
     if (updates.length === 0) return;
     await db.transaction().execute(async (trx) => {
       const now = new Date();
-      for (const { id, claudeMood, claudeEnergy, claudeDanceability, claudeVibeTags } of updates) {
+      for (const { id, mood, energy, danceability, vibeTags } of updates) {
         await trx
-          .updateTable("track")
-          .set({ claudeMood, claudeEnergy, claudeDanceability, claudeVibeTags, updatedAt: now })
-          .where("id", "=", id)
+          .insertInto("trackClaudeEnrichment")
+          .values({ trackId: id, mood, energy, danceability, vibeTags, enrichedAt: now })
+          .onConflict((oc) =>
+            oc.column("trackId").doUpdateSet({
+              mood: (eb) => eb.ref("excluded.mood"),
+              energy: (eb) => eb.ref("excluded.energy"),
+              danceability: (eb) => eb.ref("excluded.danceability"),
+              vibeTags: (eb) => eb.ref("excluded.vibeTags"),
+              enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+            })
+          )
           .execute();
       }
     });
   },
 
   async setEnrichmentVersion(
+    table: "trackSpotifyEnrichment" | "trackClaudeEnrichment" | "trackLastfmEnrichment",
     version: number,
     limit: number
   ): Promise<number> {
     const result = await db
-      .updateTable("track")
-      .set({ enrichmentVersion: version, enrichedAt: new Date() })
+      .updateTable(table)
+      .set({ version, enrichedAt: new Date() })
       .where(
-        "id",
+        "trackId",
         "in",
         db
-          .selectFrom("track")
-          .select("id")
-          .where("enrichmentVersion", "<", version)
+          .selectFrom(table)
+          .select("trackId")
+          .where("version", "<", version)
           .limit(limit)
       )
       .execute();
@@ -233,9 +288,6 @@ export const trackRepository = {
               name: song.name,
               album: song.album,
               albumArtUrl: song.albumArtUrl,
-              spotifyPopularity: song.spotifyPopularity,
-              spotifyDurationMs: song.spotifyDurationMs,
-              spotifyReleaseDate: song.spotifyReleaseDate,
               updatedAt: now,
             }))
           )
@@ -244,10 +296,6 @@ export const trackRepository = {
               name: (eb) => eb.ref("excluded.name"),
               album: (eb) => eb.ref("excluded.album"),
               albumArtUrl: (eb) => eb.ref("excluded.albumArtUrl"),
-              spotifyPopularity: (eb) => eb.ref("excluded.spotifyPopularity"),
-              spotifyDurationMs: (eb) => eb.ref("excluded.spotifyDurationMs"),
-              spotifyReleaseDate: (eb) =>
-                eb.ref("excluded.spotifyReleaseDate"),
               updatedAt: (eb) => eb.ref("excluded.updatedAt"),
             })
           )
@@ -324,6 +372,42 @@ export const trackRepository = {
             oc.columns(["userId", "trackId"]).doNothing()
           )
           .execute();
+
+        // 7. Seed TrackSpotifyEnrichment rows (version 0)
+        const spotifyEnrichmentValues = batch.map((song) => {
+          const trackId = spotifyIdToTrackId.get(song.spotifyId)!;
+          return {
+            trackId,
+            popularity: song.spotifyPopularity,
+            durationMs: song.spotifyDurationMs,
+            releaseDate: song.spotifyReleaseDate,
+          };
+        });
+
+        await trx
+          .insertInto("trackSpotifyEnrichment")
+          .values(spotifyEnrichmentValues)
+          .onConflict((oc) =>
+            oc.column("trackId").doUpdateSet({
+              popularity: (eb) => eb.ref("excluded.popularity"),
+              durationMs: (eb) => eb.ref("excluded.durationMs"),
+              releaseDate: (eb) => eb.ref("excluded.releaseDate"),
+            })
+          )
+          .execute();
+
+        // 8. Seed ArtistSpotifyEnrichment rows (version 0)
+        const artistEnrichmentValues = artists.map((a) => ({
+          artistId: a.id,
+        }));
+
+        if (artistEnrichmentValues.length > 0) {
+          await trx
+            .insertInto("artistSpotifyEnrichment")
+            .values(artistEnrichmentValues)
+            .onConflict((oc) => oc.column("artistId").doNothing())
+            .execute();
+        }
       });
     }
   },

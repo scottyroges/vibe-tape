@@ -47,10 +47,11 @@ describe("trackRepository", () => {
   });
 
   describe("upsertMany", () => {
-    it("inserts artists, tracks, track_artist join, and liked songs", async () => {
-      // execute is called 6 times in order:
+    it("inserts artists, tracks, track_artist join, liked songs, and enrichment rows", async () => {
+      // execute is called 8 times in order:
       // 1. artist INSERT, 2. artist SELECT, 3. track INSERT,
-      // 4. track SELECT, 5. trackArtist INSERT, 6. likedSong INSERT
+      // 4. track SELECT, 5. trackArtist INSERT, 6. likedSong INSERT,
+      // 7. trackSpotifyEnrichment INSERT, 8. artistSpotifyEnrichment INSERT
       execute
         .mockResolvedValueOnce([]) // artist INSERT
         .mockResolvedValueOnce([   // artist SELECT
@@ -62,7 +63,9 @@ describe("trackRepository", () => {
           { id: "track-1", spotifyId: "s1" },
         ])
         .mockResolvedValueOnce([]) // trackArtist INSERT
-        .mockResolvedValueOnce([]); // likedSong INSERT
+        .mockResolvedValueOnce([]) // likedSong INSERT
+        .mockResolvedValueOnce([]) // trackSpotifyEnrichment INSERT
+        .mockResolvedValueOnce([]); // artistSpotifyEnrichment INSERT
 
       await trackRepository.upsertMany("u1", [
         {
@@ -85,6 +88,8 @@ describe("trackRepository", () => {
       expect(insertInto).toHaveBeenCalledWith("track");
       expect(insertInto).toHaveBeenCalledWith("trackArtist");
       expect(insertInto).toHaveBeenCalledWith("likedSong");
+      expect(insertInto).toHaveBeenCalledWith("trackSpotifyEnrichment");
+      expect(insertInto).toHaveBeenCalledWith("artistSpotifyEnrichment");
     });
 
     it("does nothing for empty array", async () => {
@@ -95,9 +100,9 @@ describe("trackRepository", () => {
   });
 
   describe("findStale", () => {
-    it("queries tracks with enrichmentVersion below target", async () => {
+    it("queries tracks with stale spotify enrichment via left join", async () => {
       const expected = [
-        { id: "t1", spotifyId: "s1", name: "Song 1", enrichmentVersion: 0 },
+        { id: "t1", spotifyId: "s1", name: "Song 1" },
       ];
       execute.mockResolvedValue(expected);
 
@@ -109,7 +114,7 @@ describe("trackRepository", () => {
   });
 
   describe("updateDerivedEra", () => {
-    it("updates each track with derived era", async () => {
+    it("upserts each track's spotify enrichment with derived era", async () => {
       execute.mockResolvedValue([]);
 
       await trackRepository.updateDerivedEra([
@@ -117,21 +122,21 @@ describe("trackRepository", () => {
         { id: "t2", derivedEra: "1990s" },
       ]);
 
-      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(insertInto).toHaveBeenCalledWith("trackSpotifyEnrichment");
       expect(execute).toHaveBeenCalledTimes(2);
     });
 
     it("does nothing for empty array", async () => {
       await trackRepository.updateDerivedEra([]);
 
-      expect(updateTable).not.toHaveBeenCalled();
+      expect(insertInto).not.toHaveBeenCalled();
     });
   });
 
   describe("findStaleWithPrimaryArtist", () => {
-    it("queries tracks with primary artist join", async () => {
+    it("queries tracks with primary artist join and stale lastfm enrichment", async () => {
       const expected = [
-        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1", enrichmentVersion: 0 },
+        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1" },
       ];
       execute.mockResolvedValue(expected);
 
@@ -144,29 +149,29 @@ describe("trackRepository", () => {
   });
 
   describe("updateLastfmTags", () => {
-    it("updates each track with Last.fm tags in a transaction", async () => {
+    it("upserts each track's lastfm enrichment with tags in a transaction", async () => {
       execute.mockResolvedValue([]);
 
       await trackRepository.updateLastfmTags([
-        { id: "t1", lastfmTags: ["rock", "alternative"] },
-        { id: "t2", lastfmTags: ["electronic"] },
+        { id: "t1", tags: ["rock", "alternative"] },
+        { id: "t2", tags: ["electronic"] },
       ]);
 
-      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(insertInto).toHaveBeenCalledWith("trackLastfmEnrichment");
       expect(execute).toHaveBeenCalledTimes(2);
     });
 
     it("does nothing for empty array", async () => {
       await trackRepository.updateLastfmTags([]);
 
-      expect(updateTable).not.toHaveBeenCalled();
+      expect(insertInto).not.toHaveBeenCalled();
     });
   });
 
   describe("findStaleWithArtists", () => {
-    it("queries tracks with artist join", async () => {
+    it("queries tracks with artist join and stale claude enrichment", async () => {
       const expected = [
-        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1", enrichmentVersion: 0 },
+        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1" },
       ];
       execute.mockResolvedValue(expected);
 
@@ -178,51 +183,59 @@ describe("trackRepository", () => {
   });
 
   describe("updateClaudeClassification", () => {
-    it("updates each track with classification data", async () => {
+    it("upserts each track's claude enrichment with classification data", async () => {
       execute.mockResolvedValue([]);
 
       await trackRepository.updateClaudeClassification([
         {
           id: "t1",
-          claudeMood: "melancholic",
-          claudeEnergy: "low",
-          claudeDanceability: "low",
-          claudeVibeTags: ["late-night", "rainy-day"],
+          mood: "melancholic",
+          energy: "low",
+          danceability: "low",
+          vibeTags: ["late-night", "rainy-day"],
         },
         {
           id: "t2",
-          claudeMood: "uplifting",
-          claudeEnergy: "high",
-          claudeDanceability: "high",
-          claudeVibeTags: ["summer", "driving"],
+          mood: "uplifting",
+          energy: "high",
+          danceability: "high",
+          vibeTags: ["summer", "driving"],
         },
       ]);
 
-      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(insertInto).toHaveBeenCalledWith("trackClaudeEnrichment");
       expect(execute).toHaveBeenCalledTimes(2);
     });
 
     it("does nothing for empty array", async () => {
       await trackRepository.updateClaudeClassification([]);
 
-      expect(updateTable).not.toHaveBeenCalled();
+      expect(insertInto).not.toHaveBeenCalled();
     });
   });
 
   describe("setEnrichmentVersion", () => {
-    it("updates tracks below target version and returns count", async () => {
+    it("updates enrichment rows below target version and returns count", async () => {
       execute.mockResolvedValue([{ numUpdatedRows: BigInt(10) }]);
 
-      const result = await trackRepository.setEnrichmentVersion(1, 1000);
+      const result = await trackRepository.setEnrichmentVersion(
+        "trackSpotifyEnrichment",
+        1,
+        1000
+      );
 
       expect(result).toBe(10);
-      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(updateTable).toHaveBeenCalledWith("trackSpotifyEnrichment");
     });
 
     it("returns 0 when no stale tracks", async () => {
       execute.mockResolvedValue([{ numUpdatedRows: BigInt(0) }]);
 
-      const result = await trackRepository.setEnrichmentVersion(1, 1000);
+      const result = await trackRepository.setEnrichmentVersion(
+        "trackClaudeEnrichment",
+        1,
+        1000
+      );
 
       expect(result).toBe(0);
     });

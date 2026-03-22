@@ -1,7 +1,12 @@
 import { inngest } from "@/lib/inngest";
 import { getValidToken } from "@/lib/spotify-token";
 import { fetchLikedSongs, fetchArtists } from "@/lib/spotify";
-import { CURRENT_ENRICHMENT_VERSION, deriveEra } from "@/lib/enrichment";
+import {
+  SPOTIFY_ENRICHMENT_VERSION,
+  CLAUDE_ENRICHMENT_VERSION,
+  LASTFM_ENRICHMENT_VERSION,
+  deriveEra,
+} from "@/lib/enrichment";
 import { buildClassifyPrompt } from "@/lib/prompts/classify-tracks";
 import { classifyTracks } from "@/lib/claude";
 import { getArtistTopTags, getTrackTopTags } from "@/lib/lastfm";
@@ -117,7 +122,8 @@ export const syncLibrary = inngest.createFunction(
         `enrich-artists/spotify-genres-${artistGenreOffset}`,
         async () => {
           const stale = await artistRepository.findStale(
-            CURRENT_ENRICHMENT_VERSION,
+            "artistSpotifyEnrichment",
+            SPOTIFY_ENRICHMENT_VERSION,
             ARTIST_GENRE_CHUNK_SIZE
           );
           if (stale.length === 0) return 0;
@@ -131,7 +137,7 @@ export const syncLibrary = inngest.createFunction(
             .filter((a) => genreMap.has(a.spotifyId))
             .map((a) => ({
               id: a.id,
-              spotifyGenres: genreMap.get(a.spotifyId)!,
+              genres: genreMap.get(a.spotifyId)!,
             }));
 
           await artistRepository.updateGenres(updates);
@@ -149,18 +155,19 @@ export const syncLibrary = inngest.createFunction(
         `enrich-artists/lastfm-tags-${artistLastfmOffset}`,
         async () => {
           const stale = await artistRepository.findStale(
-            CURRENT_ENRICHMENT_VERSION,
+            "artistLastfmEnrichment",
+            LASTFM_ENRICHMENT_VERSION,
             LASTFM_CHUNK_SIZE
           );
           if (stale.length === 0) return 0;
 
-          const updates: { id: string; lastfmTags: string[] }[] = [];
+          const updates: { id: string; tags: string[] }[] = [];
 
           for (const artist of stale) {
             try {
               const tags = await getArtistTopTags(artist.name);
               if (tags.length > 0) {
-                updates.push({ id: artist.id, lastfmTags: tags });
+                updates.push({ id: artist.id, tags });
               }
             } catch (err) {
               console.warn(
@@ -178,20 +185,37 @@ export const syncLibrary = inngest.createFunction(
       artistLastfmOffset += LASTFM_CHUNK_SIZE;
     }
 
-    // Step 5c: Set artist enrichment version
-    let artistVersionOffset = 0;
+    // Step 5c: Set artist enrichment versions
+    let artistSpotifyVersionOffset = 0;
     while (true) {
       const updated = await step.run(
-        `enrich-artists/set-version-${artistVersionOffset}`,
+        `enrich-artists/set-spotify-version-${artistSpotifyVersionOffset}`,
         async () => {
           return artistRepository.setEnrichmentVersion(
-            CURRENT_ENRICHMENT_VERSION,
+            "artistSpotifyEnrichment",
+            SPOTIFY_ENRICHMENT_VERSION,
             SET_VERSION_CHUNK_SIZE
           );
         }
       );
       if (updated < SET_VERSION_CHUNK_SIZE) break;
-      artistVersionOffset += SET_VERSION_CHUNK_SIZE;
+      artistSpotifyVersionOffset += SET_VERSION_CHUNK_SIZE;
+    }
+
+    let artistLastfmVersionOffset = 0;
+    while (true) {
+      const updated = await step.run(
+        `enrich-artists/set-lastfm-version-${artistLastfmVersionOffset}`,
+        async () => {
+          return artistRepository.setEnrichmentVersion(
+            "artistLastfmEnrichment",
+            LASTFM_ENRICHMENT_VERSION,
+            SET_VERSION_CHUNK_SIZE
+          );
+        }
+      );
+      if (updated < SET_VERSION_CHUNK_SIZE) break;
+      artistLastfmVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
     // ── Track Enrichment ──
@@ -203,7 +227,7 @@ export const syncLibrary = inngest.createFunction(
         `enrich-tracks/era-${trackEraOffset}`,
         async () => {
           const stale = await trackRepository.findStale(
-            CURRENT_ENRICHMENT_VERSION,
+            SPOTIFY_ENRICHMENT_VERSION,
             TRACK_ERA_CHUNK_SIZE
           );
           if (stale.length === 0) return 0;
@@ -211,7 +235,7 @@ export const syncLibrary = inngest.createFunction(
           const updates = stale
             .map((t) => ({
               id: t.id,
-              derivedEra: deriveEra(t.spotifyReleaseDate),
+              derivedEra: deriveEra(t.releaseDate),
             }))
             .filter(
               (u): u is { id: string; derivedEra: string } =>
@@ -233,17 +257,17 @@ export const syncLibrary = inngest.createFunction(
         `enrich-tracks/claude-classify-${claudeOffset}`,
         async () => {
           const stale = await trackRepository.findStaleWithArtists(
-            CURRENT_ENRICHMENT_VERSION,
+            CLAUDE_ENRICHMENT_VERSION,
             CLAUDE_CLASSIFY_CHUNK_SIZE
           );
           if (stale.length === 0) return 0;
 
           const updates: {
             id: string;
-            claudeMood: string;
-            claudeEnergy: string;
-            claudeDanceability: string;
-            claudeVibeTags: string[];
+            mood: string;
+            energy: string;
+            danceability: string;
+            vibeTags: string[];
           }[] = [];
 
           for (let i = 0; i < stale.length; i += CLAUDE_BATCH_SIZE) {
@@ -263,10 +287,10 @@ export const syncLibrary = inngest.createFunction(
               if (!isValidClassification(classification)) continue;
               updates.push({
                 id: batch[j]!.id,
-                claudeMood: classification.mood,
-                claudeEnergy: classification.energy,
-                claudeDanceability: classification.danceability,
-                claudeVibeTags: classification.vibeTags,
+                mood: classification.mood,
+                energy: classification.energy,
+                danceability: classification.danceability,
+                vibeTags: classification.vibeTags,
               });
             }
           }
@@ -286,18 +310,18 @@ export const syncLibrary = inngest.createFunction(
         `enrich-tracks/lastfm-tags-${trackLastfmOffset}`,
         async () => {
           const stale = await trackRepository.findStaleWithPrimaryArtist(
-            CURRENT_ENRICHMENT_VERSION,
+            LASTFM_ENRICHMENT_VERSION,
             LASTFM_CHUNK_SIZE
           );
           if (stale.length === 0) return 0;
 
-          const updates: { id: string; lastfmTags: string[] }[] = [];
+          const updates: { id: string; tags: string[] }[] = [];
 
           for (const track of stale) {
             try {
               const tags = await getTrackTopTags(track.artist, track.name);
               if (tags.length > 0) {
-                updates.push({ id: track.id, lastfmTags: tags });
+                updates.push({ id: track.id, tags });
               }
             } catch (err) {
               console.warn(
@@ -315,20 +339,53 @@ export const syncLibrary = inngest.createFunction(
       trackLastfmOffset += LASTFM_CHUNK_SIZE;
     }
 
-    // Step 6d: Set track enrichment version
-    let trackVersionOffset = 0;
+    // Step 6d: Set track enrichment versions
+    let trackSpotifyVersionOffset = 0;
     while (true) {
       const updated = await step.run(
-        `enrich-tracks/set-version-${trackVersionOffset}`,
+        `enrich-tracks/set-spotify-version-${trackSpotifyVersionOffset}`,
         async () => {
           return trackRepository.setEnrichmentVersion(
-            CURRENT_ENRICHMENT_VERSION,
+            "trackSpotifyEnrichment",
+            SPOTIFY_ENRICHMENT_VERSION,
             SET_VERSION_CHUNK_SIZE
           );
         }
       );
       if (updated < SET_VERSION_CHUNK_SIZE) break;
-      trackVersionOffset += SET_VERSION_CHUNK_SIZE;
+      trackSpotifyVersionOffset += SET_VERSION_CHUNK_SIZE;
+    }
+
+    let trackClaudeVersionOffset = 0;
+    while (true) {
+      const updated = await step.run(
+        `enrich-tracks/set-claude-version-${trackClaudeVersionOffset}`,
+        async () => {
+          return trackRepository.setEnrichmentVersion(
+            "trackClaudeEnrichment",
+            CLAUDE_ENRICHMENT_VERSION,
+            SET_VERSION_CHUNK_SIZE
+          );
+        }
+      );
+      if (updated < SET_VERSION_CHUNK_SIZE) break;
+      trackClaudeVersionOffset += SET_VERSION_CHUNK_SIZE;
+    }
+
+    let trackLastfmVersionOffset = 0;
+    while (true) {
+      const updated = await step.run(
+        `enrich-tracks/set-lastfm-version-${trackLastfmVersionOffset}`,
+        async () => {
+          return trackRepository.setEnrichmentVersion(
+            "trackLastfmEnrichment",
+            LASTFM_ENRICHMENT_VERSION,
+            SET_VERSION_CHUNK_SIZE
+          );
+        }
+      );
+      if (updated < SET_VERSION_CHUNK_SIZE) break;
+      trackLastfmVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
     await step.run("update-status", async () => {
