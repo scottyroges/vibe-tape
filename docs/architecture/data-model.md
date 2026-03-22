@@ -37,6 +37,10 @@ Fields:
 - `spotifyDurationMs` — Track duration in milliseconds, nullable.
 - `spotifyReleaseDate` — Album release date as string (e.g., "2024-01-01"), nullable.
 - `derivedEra` — Decade/era classification, computed during enrichment.
+- `claudeMood` — Single-word mood descriptor (e.g., "melancholic", "uplifting"), nullable. Classified by Claude Haiku during enrichment.
+- `claudeEnergy` — Energy level: "low", "medium", or "high", nullable.
+- `claudeDanceability` — Danceability level: "low", "medium", or "high", nullable.
+- `claudeVibeTags` — Array of 2-5 short vibe descriptors (e.g., "late-night", "driving"). Defaults to empty array.
 - `lastfmTags` — Array of tag strings from Last.fm (populated during enrichment).
 - `enrichmentVersion` — Integer tracking which enrichment pipeline version last processed this track. Default 0 (unenriched).
 - `enrichedAt` — Timestamp of last enrichment run.

@@ -20,7 +20,7 @@ Free for as long as possible. Every infrastructure choice prioritizes free tiers
 | Auth | Better Auth + genericOAuth plugin | Session management + Spotify OAuth. We own token storage separately. |
 | File storage | Cloudflare R2 | 10GB free. Stores AI-generated art cards and cached images. |
 | Payments | Stripe | Free until you collect money. Per-transaction fee only. |
-| AI — vibe analysis | Claude API (Sonnet) | ~$0.01–0.02 per playlist generation. Powers seed analysis and vibe naming. |
+| AI — vibe analysis | Claude API (Sonnet + Haiku) | Sonnet for playlist generation (~$0.01–0.02/gen). Haiku for track classification (mood, energy, danceability, vibe tags) during enrichment. |
 | AI — art generation | Stable Diffusion (Replicate) | ~$0.005/image. Deferred to Tier 2. GPT-4o image gen as alternative (~$0.06). |
 | Music metadata | Last.fm API + MusicBrainz | Genre tags, BPM, era data. Free. Replaces Spotify audio features (removed Nov 2024). |
 | Background jobs | Inngest (free tier) | 50k executions/month free. Native Next.js/Vercel integration. Step functions with retries. See [ADR 009](decisions/009-async-job-processing.md). |
@@ -76,7 +76,7 @@ Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). 
 |-------|-----------|
 | `users` | `id`, `spotify_id`, `email`, `access_token`, `refresh_token`, `token_expires_at`, `tier`, `song_count`, `needs_reauth` |
 | `sessions` | Managed by Better Auth — `id`, `user_id`, `expires_at`, `token` |
-| `track` | `id`, `spotify_id`, `name`, `artist`, `album`, `album_art_url`, `lastfm_genres`, `bpm`, `era` |
+| `track` | `id`, `spotify_id`, `name`, `artist`, `album`, `album_art_url`, `derived_era`, `claude_mood`, `claude_energy`, `claude_danceability`, `claude_vibe_tags`, `lastfm_tags`, `enrichment_version` |
 | `liked_song` | `id`, `user_id`, `track_id`, `liked_at` |
 | `playlists` | `id`, `user_id`, `spotify_playlist_id`, `vibe_name`, `vibe_description`, `seed_song_ids`, `art_image_url`, `last_synced_at` |
 | `group_sessions` | `id`, `host_user_id`, `participant_ids`, `seed_song_ids`, `status`, `playlist_id`, `expires_at` | Tier 3 — not in schema yet |

@@ -71,6 +71,10 @@ export type Track = {
     spotifyDurationMs: number | null;
     spotifyReleaseDate: string | null;
     derivedEra: string | null;
+    claudeMood: string | null;
+    claudeEnergy: string | null;
+    claudeDanceability: string | null;
+    claudeVibeTags: Generated<string[]>;
     lastfmTags: Generated<string[]>;
     enrichmentVersion: Generated<number>;
     enrichedAt: Timestamp | null;
