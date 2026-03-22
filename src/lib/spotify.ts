@@ -22,7 +22,7 @@ export type SpotifyLikedSong = {
   artist: string;
   album: string;
   albumArtUrl: string | null;
-  addedAt: Date;
+  likedAt: Date;
 };
 
 export function mapTrack(item: SpotifyLikedTrackItem): SpotifyLikedSong {
@@ -32,7 +32,7 @@ export function mapTrack(item: SpotifyLikedTrackItem): SpotifyLikedSong {
     artist: item.track.artists.map((a) => a.name).join(", "),
     album: item.track.album.name,
     albumArtUrl: item.track.album.images[0]?.url ?? null,
-    addedAt: new Date(item.added_at),
+    likedAt: new Date(item.added_at),
   };
 }
 

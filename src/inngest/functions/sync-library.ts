@@ -45,10 +45,10 @@ export const syncLibrary = inngest.createFunction(
 
     await step.run("upsert-songs", async () => {
       // Inngest serializes step outputs to JSON, so Date becomes string.
-      // Rehydrate addedAt before passing to the repository.
+      // Rehydrate likedAt before passing to the repository.
       const rehydrated = songs.map((s) => ({
         ...s,
-        addedAt: new Date(s.addedAt),
+        likedAt: new Date(s.likedAt),
       }));
       await trackRepository.upsertMany(userId, rehydrated);
     });

@@ -12,10 +12,12 @@ export type Track = {
   updatedAt: Date;
 };
 
+export type TrackWithLikedAt = Track & { likedAt: Date };
+
 export type LikedSong = {
   id: string;
   userId: string;
   trackId: string;
-  addedAt: Date;
+  likedAt: Date;
   createdAt: Date;
 };
