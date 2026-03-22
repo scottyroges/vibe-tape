@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mapTrack, fetchLikedSongs } from "@/lib/spotify";
+import { mapTrack, fetchLikedSongs, fetchArtists } from "@/lib/spotify";
 
 function makeSpotifyItem(overrides: {
   id?: string;
@@ -221,6 +221,100 @@ describe("fetchLikedSongs", () => {
     );
 
     await expect(fetchLikedSongs("test-token")).rejects.toThrow(
+      "Spotify API error: 500"
+    );
+  });
+});
+
+describe("fetchArtists", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("fetches genres for a batch of artists", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({
+        artists: [
+          { id: "a1", genres: ["pop", "rock"] },
+          { id: "a2", genres: ["jazz"] },
+        ],
+      })
+    );
+
+    const result = await fetchArtists("test-token", ["a1", "a2"]);
+
+    expect(result.get("a1")).toEqual(["pop", "rock"]);
+    expect(result.get("a2")).toEqual(["jazz"]);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/artists?ids=a1,a2",
+      { headers: { Authorization: "Bearer test-token" } }
+    );
+  });
+
+  it("batches IDs into groups of 50", async () => {
+    const ids = Array.from({ length: 75 }, (_, i) => `a${i}`);
+    const batch1Artists = ids.slice(0, 50).map((id) => ({ id, genres: [] }));
+    const batch2Artists = ids.slice(50).map((id) => ({ id, genres: [] }));
+
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(mockFetchResponse({ artists: batch1Artists }))
+      .mockResolvedValueOnce(mockFetchResponse({ artists: batch2Artists }));
+
+    const result = await fetchArtists("test-token", ids);
+
+    expect(result.size).toBe(75);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles null artists in response", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({
+        artists: [
+          { id: "a1", genres: ["pop"] },
+          null,
+        ],
+      })
+    );
+
+    const result = await fetchArtists("test-token", ["a1", "a2"]);
+
+    expect(result.size).toBe(1);
+    expect(result.get("a1")).toEqual(["pop"]);
+    expect(result.has("a2")).toBe(false);
+  });
+
+  it("returns empty map for empty input", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch");
+
+    const result = await fetchArtists("test-token", []);
+
+    expect(result.size).toBe(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("retries on 429", async () => {
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(
+        mockFetchResponse(null, 429, { "Retry-After": "0" })
+      )
+      .mockResolvedValueOnce(
+        mockFetchResponse({
+          artists: [{ id: "a1", genres: ["indie"] }],
+        })
+      );
+
+    const result = await fetchArtists("test-token", ["a1"]);
+
+    expect(result.get("a1")).toEqual(["indie"]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws on non-2xx error", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse(null, 500)
+    );
+
+    await expect(fetchArtists("test-token", ["a1"])).rejects.toThrow(
       "Spotify API error: 500"
     );
   });
