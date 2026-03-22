@@ -135,4 +135,26 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("1 song")).toBeInTheDocument();
   });
+
+  it("renders Create New Vibe Tape link to /create", () => {
+    renderWithClient(<DashboardPage />);
+    const link = screen.getByRole("link", { name: /create new vibe tape/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/create");
+  });
+
+  it("renders Your Vibe Tapes section heading", () => {
+    renderWithClient(<DashboardPage />);
+    expect(screen.getByRole("heading", { name: /your vibe tapes/i })).toBeInTheDocument();
+  });
+
+  it("renders empty state when no vibe tapes exist", () => {
+    renderWithClient(<DashboardPage />);
+    expect(screen.getByText(/no vibe tapes yet/i)).toBeInTheDocument();
+  });
+
+  it("renders Library section heading", () => {
+    renderWithClient(<DashboardPage />);
+    expect(screen.getByRole("heading", { name: /library/i })).toBeInTheDocument();
+  });
 });
