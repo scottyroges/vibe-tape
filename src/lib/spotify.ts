@@ -3,9 +3,12 @@ type SpotifyLikedTrackItem = {
   track: {
     id: string;
     name: string;
-    artists: { name: string }[];
+    popularity: number;
+    duration_ms: number;
+    artists: { id: string; name: string }[];
     album: {
       name: string;
+      release_date: string;
       images: { url: string }[];
     };
   };
@@ -19,9 +22,12 @@ type SpotifyPaginatedResponse = {
 export type SpotifyLikedSong = {
   spotifyId: string;
   name: string;
-  artist: string;
+  artists: { spotifyId: string; name: string }[];
   album: string;
   albumArtUrl: string | null;
+  spotifyPopularity: number;
+  spotifyDurationMs: number;
+  spotifyReleaseDate: string;
   likedAt: Date;
 };
 
@@ -29,9 +35,15 @@ export function mapTrack(item: SpotifyLikedTrackItem): SpotifyLikedSong {
   return {
     spotifyId: item.track.id,
     name: item.track.name,
-    artist: item.track.artists.map((a) => a.name).join(", "),
+    artists: item.track.artists.map((a) => ({
+      spotifyId: a.id,
+      name: a.name,
+    })),
     album: item.track.album.name,
     albumArtUrl: item.track.album.images[0]?.url ?? null,
+    spotifyPopularity: item.track.popularity,
+    spotifyDurationMs: item.track.duration_ms,
+    spotifyReleaseDate: item.track.album.release_date,
     likedAt: new Date(item.added_at),
   };
 }

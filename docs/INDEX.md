@@ -33,4 +33,5 @@
 ## Work Plans
 
 - **Active work plans:** .personal/docs/plans/active/
+  - Phase 1 — Artist Model + Expanded Spotify Data: .personal/docs/plans/active/phase1-artist-model-spotify-data.md
 - **Completed work plans:** .personal/docs/plans/completed/

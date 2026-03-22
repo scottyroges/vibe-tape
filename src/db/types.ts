@@ -21,6 +21,17 @@ export type Account = {
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
 };
+export type Artist = {
+    id: string;
+    spotifyId: string;
+    name: string;
+    spotifyGenres: Generated<string[]>;
+    lastfmTags: Generated<string[]>;
+    enrichmentVersion: Generated<number>;
+    enrichedAt: Timestamp | null;
+    createdAt: Generated<Timestamp>;
+    updatedAt: Timestamp;
+};
 export type LikedSong = {
     id: string;
     userId: string;
@@ -54,14 +65,22 @@ export type Track = {
     id: string;
     spotifyId: string;
     name: string;
-    artist: string;
     album: string;
     albumArtUrl: string | null;
-    lastfmGenres: string | null;
-    bpm: number | null;
-    era: string | null;
+    spotifyPopularity: number | null;
+    spotifyDurationMs: number | null;
+    spotifyReleaseDate: string | null;
+    derivedEra: string | null;
+    lastfmTags: Generated<string[]>;
+    enrichmentVersion: Generated<number>;
+    enrichedAt: Timestamp | null;
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
+};
+export type TrackArtist = {
+    trackId: string;
+    artistId: string;
+    position: number;
 };
 export type User = {
     id: string;
@@ -87,10 +106,12 @@ export type Verification = {
 };
 export type DB = {
     account: Account;
+    artist: Artist;
     likedSong: LikedSong;
     playlist: Playlist;
     session: Session;
     track: Track;
+    trackArtist: TrackArtist;
     user: User;
     verification: Verification;
 };
