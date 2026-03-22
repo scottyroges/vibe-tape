@@ -88,6 +88,40 @@ export const trackRepository = {
     return rows as (Track & { artist: string })[];
   },
 
+  async findStaleWithPrimaryArtist(
+    version: number,
+    limit: number
+  ): Promise<(Track & { artist: string })[]> {
+    const rows = await db
+      .selectFrom("track")
+      .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
+      .innerJoin("artist", "artist.id", "trackArtist.artistId")
+      .where("track.enrichmentVersion", "<", version)
+      .where("trackArtist.position", "=", 0)
+      .selectAll("track")
+      .select("artist.name as artist")
+      .limit(limit)
+      .execute();
+
+    return rows as (Track & { artist: string })[];
+  },
+
+  async updateLastfmTags(
+    updates: { id: string; lastfmTags: string[] }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    await db.transaction().execute(async (trx) => {
+      const now = new Date();
+      for (const { id, lastfmTags } of updates) {
+        await trx
+          .updateTable("track")
+          .set({ lastfmTags, updatedAt: now })
+          .where("id", "=", id)
+          .execute();
+      }
+    });
+  },
+
   async updateClaudeClassification(
     updates: {
       id: string;

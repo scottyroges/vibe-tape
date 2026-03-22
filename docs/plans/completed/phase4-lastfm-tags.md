@@ -1,6 +1,6 @@
 # Plan: Phase 4 — Last.fm Tags
 
-**Status:** In Progress
+**Status:** Complete
 **Created:** 2026-03-22
 
 ## Goal
@@ -25,7 +25,7 @@ Last.fm is the pipeline bottleneck — their API allows ~5 requests/second, and 
 ## Phases and PR Splits
 
 - [x] PR 1: Last.fm client + rate limiter — `feat/lastfm-client`
-- [ ] PR 2: Repository methods + wire steps 5b/6c + version bump — `feat/lastfm-enrich-steps`
+- [x] PR 2: Repository methods + wire steps 5b/6c + version bump — `feat/lastfm-enrich-steps`
 
 PRs are sequential — PR 2 depends on PR 1.
 
@@ -138,6 +138,14 @@ _Still open:_
 - `src/lib/lastfm.ts` — new, Last.fm API client with rate limiting and tag filtering
 - `tests/lib/lastfm.test.ts` — new, tests for client, tag parsing, and throttle
 - `.env.example` — added `LASTFM_API_KEY` placeholder
+- `src/repositories/artist.repository.ts` — added `updateLastfmTags`
+- `src/repositories/track.repository.ts` — added `findStaleWithPrimaryArtist`, `updateLastfmTags`
+- `src/inngest/functions/sync-library.ts` — wired steps 5b and 6c with chunked Last.fm tag fetching
+- `src/lib/enrichment.ts` — bumped `CURRENT_ENRICHMENT_VERSION` from 2 to 3
+- `tests/inngest/functions/sync-library.test.ts` — added Last.fm enrichment tests (happy path, empty tags, error resilience, chunking)
+- `tests/lib/enrichment.test.ts` — updated version assertion to 3
+- `tests/repositories/artist.repository.test.ts` — added `updateLastfmTags` tests
+- `tests/repositories/track.repository.test.ts` — added `findStaleWithPrimaryArtist` and `updateLastfmTags` tests
 
 ## Session Notes
 
@@ -147,3 +155,11 @@ _Still open:_
 - Defensive parsing handles Last.fm quirks: error-as-200 responses, single-tag-as-object instead of array
 - No external HTTP library — plain `fetch`
 - `_resetThrottle()` exported for test isolation
+
+### PR 2 (2026-03-22)
+- `updateLastfmTags` on both repos uses transactional loop pattern (matches `updateClaudeClassification`)
+- `findStaleWithPrimaryArtist` joins on `trackArtist.position = 0` to get a single artist name per track
+- Steps 5b/6c use try/catch per entity — a single Last.fm failure logs a warning and skips that entity without aborting the chunk
+- `LASTFM_CHUNK_SIZE = 200` — fits ~40s of Last.fm calls within Vercel's 60s timeout
+- Version bump to 3 makes all entities stale; existing steps (5a, 6a, 6b) re-run but are idempotent
+- 10 new tests covering happy path, empty tags, error resilience, and chunking at 200 boundary
