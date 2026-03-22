@@ -33,6 +33,6 @@
 ## Work Plans
 
 - **Active work plans:** .personal/docs/plans/active/
-  - Phase 2 — Enrichment Pipeline Foundation: docs/plans/active/phase2-enrichment-pipeline-foundation.md
 - **Completed work plans:** .personal/docs/plans/completed/
   - Phase 1 — Artist Model + Expanded Spotify Data: .personal/docs/plans/completed/phase1-artist-model-spotify-data.md
+  - Phase 2 — Enrichment Pipeline Foundation: .personal/docs/plans/completed/phase2-enrichment-pipeline-foundation.md

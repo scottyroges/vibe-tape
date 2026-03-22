@@ -1,6 +1,6 @@
 # Plan: Phase 2 — Enrichment Pipeline Foundation
 
-**Status:** In Progress
+**Status:** Done
 **Created:** 2026-03-22
 
 ## Goal
@@ -15,7 +15,7 @@ Phase 1 added the Artist model, enrichmentVersion columns, and chunked sync pipe
 
 - [x] PR 1: Enrichment framework + era derivation + repository updates — `feat/enrichment-framework`
 - [x] PR 2: Spotify artist genres fetcher — `feat/spotify-artist-genres`
-- [ ] PR 3: Wire enrichment steps into sync pipeline — `feat/enrichment-pipeline-steps`
+- [x] PR 3: Wire enrichment steps into sync pipeline — `feat/enrichment-pipeline-steps`
 
 PR 1 and PR 2 are independent (can be developed/merged in either order). PR 3 depends on both.
 
