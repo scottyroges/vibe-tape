@@ -5,9 +5,12 @@ import { mapTrack, fetchLikedSongs } from "@/lib/spotify";
 function makeSpotifyItem(overrides: {
   id?: string;
   name?: string;
-  artists?: { name: string }[];
+  artists?: { id: string; name: string }[];
   albumName?: string;
   albumImages?: { url: string }[];
+  releaseDate?: string;
+  popularity?: number;
+  durationMs?: number;
   likedAt?: string;
 } = {}) {
   return {
@@ -15,9 +18,12 @@ function makeSpotifyItem(overrides: {
     track: {
       id: overrides.id ?? "track-1",
       name: overrides.name ?? "Test Song",
-      artists: overrides.artists ?? [{ name: "Test Artist" }],
+      popularity: overrides.popularity ?? 75,
+      duration_ms: overrides.durationMs ?? 210000,
+      artists: overrides.artists ?? [{ id: "artist-1", name: "Test Artist" }],
       album: {
         name: overrides.albumName ?? "Test Album",
+        release_date: overrides.releaseDate ?? "2024-01-01",
         images: overrides.albumImages ?? [{ url: "https://img.spotify.com/album.jpg" }],
       },
     },
@@ -42,20 +48,31 @@ describe("mapTrack", () => {
     expect(result).toEqual({
       spotifyId: "track-1",
       name: "Test Song",
-      artist: "Test Artist",
+      artists: [{ spotifyId: "artist-1", name: "Test Artist" }],
       album: "Test Album",
       albumArtUrl: "https://img.spotify.com/album.jpg",
+      spotifyPopularity: 75,
+      spotifyDurationMs: 210000,
+      spotifyReleaseDate: "2024-01-01",
       likedAt: new Date("2024-01-15T10:30:00Z"),
     });
   });
 
-  it("joins multiple artists with comma", () => {
+  it("returns structured artists array for multiple artists", () => {
     const item = makeSpotifyItem({
-      artists: [{ name: "Artist A" }, { name: "Artist B" }, { name: "Artist C" }],
+      artists: [
+        { id: "a1", name: "Artist A" },
+        { id: "a2", name: "Artist B" },
+        { id: "a3", name: "Artist C" },
+      ],
     });
     const result = mapTrack(item);
 
-    expect(result.artist).toBe("Artist A, Artist B, Artist C");
+    expect(result.artists).toEqual([
+      { spotifyId: "a1", name: "Artist A" },
+      { spotifyId: "a2", name: "Artist B" },
+      { spotifyId: "a3", name: "Artist C" },
+    ]);
   });
 
   it("returns null albumArtUrl when no images", () => {
@@ -63,6 +80,19 @@ describe("mapTrack", () => {
     const result = mapTrack(item);
 
     expect(result.albumArtUrl).toBeNull();
+  });
+
+  it("maps popularity, duration, and release date", () => {
+    const item = makeSpotifyItem({
+      popularity: 42,
+      durationMs: 300000,
+      releaseDate: "1995-06-15",
+    });
+    const result = mapTrack(item);
+
+    expect(result.spotifyPopularity).toBe(42);
+    expect(result.spotifyDurationMs).toBe(300000);
+    expect(result.spotifyReleaseDate).toBe("1995-06-15");
   });
 });
 

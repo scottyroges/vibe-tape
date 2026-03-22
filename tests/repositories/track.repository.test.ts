@@ -24,7 +24,7 @@ describe("trackRepository", () => {
   describe("findByUserId", () => {
     it("returns tracks for a user via join", async () => {
       const expected = [
-        { id: "t1", spotifyId: "s1", name: "Song 1" },
+        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1" },
       ];
       execute.mockResolvedValue(expected);
 
@@ -47,23 +47,43 @@ describe("trackRepository", () => {
   });
 
   describe("upsertMany", () => {
-    it("inserts tracks and liked songs", async () => {
-      execute.mockResolvedValue([
-        { id: "track-1", spotifyId: "s1" },
-      ]);
+    it("inserts artists, tracks, track_artist join, and liked songs", async () => {
+      // execute is called 6 times in order:
+      // 1. artist INSERT, 2. artist SELECT, 3. track INSERT,
+      // 4. track SELECT, 5. trackArtist INSERT, 6. likedSong INSERT
+      execute
+        .mockResolvedValueOnce([]) // artist INSERT
+        .mockResolvedValueOnce([   // artist SELECT
+          { id: "artist-1", spotifyId: "a1" },
+          { id: "artist-2", spotifyId: "a2" },
+        ])
+        .mockResolvedValueOnce([]) // track INSERT
+        .mockResolvedValueOnce([   // track SELECT
+          { id: "track-1", spotifyId: "s1" },
+        ])
+        .mockResolvedValueOnce([]) // trackArtist INSERT
+        .mockResolvedValueOnce([]); // likedSong INSERT
 
       await trackRepository.upsertMany("u1", [
         {
           spotifyId: "s1",
           name: "Song 1",
-          artist: "Artist 1",
+          artists: [
+            { spotifyId: "a1", name: "Artist 1" },
+            { spotifyId: "a2", name: "Artist 2" },
+          ],
           album: "Album 1",
           albumArtUrl: "https://img.spotify.com/1.jpg",
+          spotifyPopularity: 75,
+          spotifyDurationMs: 210000,
+          spotifyReleaseDate: "2024-01-01",
           likedAt: new Date("2024-01-01"),
         },
       ]);
 
+      expect(insertInto).toHaveBeenCalledWith("artist");
       expect(insertInto).toHaveBeenCalledWith("track");
+      expect(insertInto).toHaveBeenCalledWith("trackArtist");
       expect(insertInto).toHaveBeenCalledWith("likedSong");
     });
 

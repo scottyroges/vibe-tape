@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { sql } from "kysely";
 import { createId } from "@/lib/id";
 import type { Track, TrackWithLikedAt } from "@/domain/types";
 import type { SpotifyLikedSong } from "@/lib/spotify";
@@ -13,14 +14,24 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 export const trackRepository = {
   async findByUserId(userId: string): Promise<TrackWithLikedAt[]> {
-    return db
+    const rows = await db
       .selectFrom("track")
       .innerJoin("likedSong", "likedSong.trackId", "track.id")
+      .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
+      .innerJoin("artist", "artist.id", "trackArtist.artistId")
       .where("likedSong.userId", "=", userId)
       .selectAll("track")
       .select("likedSong.likedAt")
+      .select(
+        sql<string>`string_agg(artist.name, ', ' order by track_artist.position)`.as(
+          "artist"
+        )
+      )
+      .groupBy(["track.id", "likedSong.likedAt"])
       .orderBy("likedSong.likedAt", "desc")
       .execute();
+
+    return rows as TrackWithLikedAt[];
   },
 
   async findByIds(ids: string[]): Promise<Track[]> {
@@ -50,7 +61,48 @@ export const trackRepository = {
       await db.transaction().execute(async (trx) => {
         const now = new Date();
 
-        // 1. Upsert tracks
+        // 1. Deduplicate artists across all songs in this batch
+        const artistMap = new Map<string, string>();
+        for (const song of batch) {
+          for (const a of song.artists) {
+            artistMap.set(a.spotifyId, a.name);
+          }
+        }
+        const uniqueArtists = Array.from(artistMap.entries()).map(
+          ([spotifyId, name]) => ({
+            id: createId(),
+            spotifyId,
+            name,
+            updatedAt: now,
+          })
+        );
+
+        if (uniqueArtists.length > 0) {
+          await trx
+            .insertInto("artist")
+            .values(uniqueArtists)
+            .onConflict((oc) =>
+              oc.column("spotifyId").doUpdateSet({
+                name: (eb) => eb.ref("excluded.name"),
+                updatedAt: (eb) => eb.ref("excluded.updatedAt"),
+              })
+            )
+            .execute();
+        }
+
+        // 2. Look up artist IDs
+        const artistSpotifyIds = Array.from(artistMap.keys());
+        const artists = await trx
+          .selectFrom("artist")
+          .where("spotifyId", "in", artistSpotifyIds)
+          .select(["id", "spotifyId"])
+          .execute();
+
+        const spotifyIdToArtistId = new Map(
+          artists.map((a) => [a.spotifyId, a.id])
+        );
+
+        // 3. Upsert tracks
         await trx
           .insertInto("track")
           .values(
@@ -58,24 +110,29 @@ export const trackRepository = {
               id: createId(),
               spotifyId: song.spotifyId,
               name: song.name,
-              artist: song.artist,
               album: song.album,
               albumArtUrl: song.albumArtUrl,
+              spotifyPopularity: song.spotifyPopularity,
+              spotifyDurationMs: song.spotifyDurationMs,
+              spotifyReleaseDate: song.spotifyReleaseDate,
               updatedAt: now,
             }))
           )
           .onConflict((oc) =>
             oc.column("spotifyId").doUpdateSet({
               name: (eb) => eb.ref("excluded.name"),
-              artist: (eb) => eb.ref("excluded.artist"),
               album: (eb) => eb.ref("excluded.album"),
               albumArtUrl: (eb) => eb.ref("excluded.albumArtUrl"),
+              spotifyPopularity: (eb) => eb.ref("excluded.spotifyPopularity"),
+              spotifyDurationMs: (eb) => eb.ref("excluded.spotifyDurationMs"),
+              spotifyReleaseDate: (eb) =>
+                eb.ref("excluded.spotifyReleaseDate"),
               updatedAt: (eb) => eb.ref("excluded.updatedAt"),
             })
           )
           .execute();
 
-        // 2. Look up track IDs for this batch
+        // 4. Look up track IDs
         const spotifyIds = batch.map((s) => s.spotifyId);
         const tracks = await trx
           .selectFrom("track")
@@ -87,11 +144,49 @@ export const trackRepository = {
           tracks.map((t) => [t.spotifyId, t.id])
         );
 
-        // 3. Upsert liked_song entries
+        // 5. Insert track_artist join rows
+        const trackArtistValues: {
+          trackId: string;
+          artistId: string;
+          position: number;
+        }[] = [];
+        for (const song of batch) {
+          const trackId = spotifyIdToTrackId.get(song.spotifyId);
+          if (!trackId) {
+            throw new Error(
+              `Track not found for spotifyId: ${song.spotifyId}`
+            );
+          }
+          for (let i = 0; i < song.artists.length; i++) {
+            const artistId = spotifyIdToArtistId.get(
+              song.artists[i]!.spotifyId
+            );
+            if (!artistId) {
+              throw new Error(
+                `Artist not found for spotifyId: ${song.artists[i]!.spotifyId}`
+              );
+            }
+            trackArtistValues.push({ trackId, artistId, position: i });
+          }
+        }
+
+        if (trackArtistValues.length > 0) {
+          await trx
+            .insertInto("trackArtist")
+            .values(trackArtistValues)
+            .onConflict((oc) =>
+              oc.columns(["trackId", "artistId"]).doNothing()
+            )
+            .execute();
+        }
+
+        // 6. Upsert liked_song entries
         const likedSongValues = batch.map((song) => {
           const trackId = spotifyIdToTrackId.get(song.spotifyId);
           if (!trackId) {
-            throw new Error(`Track not found for spotifyId: ${song.spotifyId}`);
+            throw new Error(
+              `Track not found for spotifyId: ${song.spotifyId}`
+            );
           }
           return {
             id: createId(),

@@ -97,20 +97,51 @@ enum SyncStatus {
 }
 
 model Track {
-  id           String      @id @default(cuid())
-  spotifyId    String      @unique @map("spotify_id")
-  name         String
-  artist       String
-  album        String
-  albumArtUrl  String?     @map("album_art_url")
-  lastfmGenres String?     @map("lastfm_genres")
-  bpm          Int?
-  era          String?
-  likedSongs   LikedSong[]
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  id                  String        @id @default(cuid())
+  spotifyId           String        @unique @map("spotify_id")
+  name                String
+  album               String
+  albumArtUrl         String?       @map("album_art_url")
+  spotifyPopularity   Int?          @map("spotify_popularity")
+  spotifyDurationMs   Int?          @map("spotify_duration_ms")
+  spotifyReleaseDate  String?       @map("spotify_release_date")
+  derivedEra          String?       @map("derived_era")
+  lastfmTags          String[]      @default([]) @map("lastfm_tags")
+  enrichmentVersion   Int           @default(0) @map("enrichment_version")
+  enrichedAt          DateTime?     @map("enriched_at")
+  trackArtists        TrackArtist[]
+  likedSongs          LikedSong[]
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
 
   @@map("track")
+}
+
+model Artist {
+  id                  String        @id @default(cuid())
+  spotifyId           String        @unique @map("spotify_id")
+  name                String
+  spotifyGenres       String[]      @default([]) @map("spotify_genres")
+  lastfmTags          String[]      @default([]) @map("lastfm_tags")
+  enrichmentVersion   Int           @default(0) @map("enrichment_version")
+  enrichedAt          DateTime?     @map("enriched_at")
+  trackArtists        TrackArtist[]
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  @@map("artist")
+}
+
+model TrackArtist {
+  trackId  String @map("track_id")
+  artistId String @map("artist_id")
+  position Int
+  track    Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, artistId])
+  @@index([artistId])
+  @@map("track_artist")
 }
 
 model LikedSong {

@@ -6,6 +6,8 @@
 User
 ├── LikedSong (user↔track join table)
 │   └── Track (one row per unique Spotify track)
+│       └── TrackArtist (track↔artist join, ordered by position)
+│           └── Artist (one row per unique Spotify artist)
 └── Playlist (generated vibe playlists)
     └── seedSongIds[] (references to Tracks that seeded this playlist)
 
@@ -27,13 +29,37 @@ Fields:
 - `lastSyncedAt` — Timestamp of last successful library sync.
 
 ### Track
-A unique Spotify track. Tracks are shared across users — multiple users can like the same track without duplicating metadata. Enriched with Last.fm metadata (Tier 2).
+A unique Spotify track. Tracks are shared across users — multiple users can like the same track without duplicating metadata. Artists are linked via the TrackArtist join table rather than stored as a string column.
 
 Fields:
 - `spotifyId` — Spotify track ID. Globally unique (`@unique`).
-- `lastfmGenres` — Comma-separated genre tags from Last.fm (Tier 2).
-- `bpm` — Beats per minute from MusicBrainz (Tier 2).
-- `era` — Decade/era classification (Tier 2).
+- `spotifyPopularity` — Spotify popularity score (0-100), nullable.
+- `spotifyDurationMs` — Track duration in milliseconds, nullable.
+- `spotifyReleaseDate` — Album release date as string (e.g., "2024-01-01"), nullable.
+- `derivedEra` — Decade/era classification, computed during enrichment.
+- `lastfmTags` — Array of tag strings from Last.fm (populated during enrichment).
+- `enrichmentVersion` — Integer tracking which enrichment pipeline version last processed this track. Default 0 (unenriched).
+- `enrichedAt` — Timestamp of last enrichment run.
+
+### Artist
+A unique Spotify artist. Artists are shared across tracks — the same artist can appear on many tracks without duplicating metadata. Like Track, Artist carries its own enrichment version for the enrichment pipeline.
+
+Fields:
+- `spotifyId` — Spotify artist ID. Globally unique (`@unique`).
+- `name` — Display name from Spotify, updated on each sync.
+- `spotifyGenres` — Array of genre strings from the Spotify artist endpoint (populated during enrichment).
+- `lastfmTags` — Array of tag strings from Last.fm (populated during enrichment).
+- `enrichmentVersion` — Integer tracking which enrichment pipeline version last processed this artist. Default 0.
+- `enrichedAt` — Timestamp of last enrichment run.
+
+### TrackArtist
+Join table linking tracks to artists with ordering. A track's primary artist is at position 0, featured artists follow.
+
+Fields:
+- `trackId` — References Track.
+- `artistId` — References Artist.
+- `position` — Artist order (0-indexed). Used by `STRING_AGG(...ORDER BY position)` in the query layer to reconstruct a display string.
+- Composite primary key on `(trackId, artistId)`.
 
 ### LikedSong
 Join table linking users to tracks. Represents a user's liked song on Spotify.

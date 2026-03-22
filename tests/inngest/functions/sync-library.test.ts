@@ -52,6 +52,20 @@ function createMockStep() {
   };
 }
 
+function makeSong(overrides: { spotifyId?: string; name?: string } = {}) {
+  return {
+    spotifyId: overrides.spotifyId ?? "sp1",
+    name: overrides.name ?? "Song",
+    artists: [{ spotifyId: "a1", name: "Artist" }],
+    album: "Album",
+    albumArtUrl: null,
+    spotifyPopularity: 75,
+    spotifyDurationMs: 210000,
+    spotifyReleaseDate: "2024-01-01",
+    likedAt: "2024-01-01T00:00:00.000Z",
+  };
+}
+
 describe("syncLibrary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -65,16 +79,7 @@ describe("syncLibrary", () => {
 
   it("orchestrates all steps in order", async () => {
     mockGetValidToken.mockResolvedValue({ accessToken: "tok-123" });
-    mockFetchLikedSongs.mockResolvedValue([
-      {
-        spotifyId: "sp1",
-        name: "Song",
-        artist: "Art",
-        album: "Alb",
-        albumArtUrl: null,
-        likedAt: "2024-01-01T00:00:00.000Z",
-      },
-    ]);
+    mockFetchLikedSongs.mockResolvedValue([makeSong()]);
     mockUpsertMany.mockResolvedValue(undefined);
     mockUpdateSyncStatus.mockResolvedValue(undefined);
 
@@ -120,16 +125,7 @@ describe("syncLibrary", () => {
 
   it("rehydrates Date fields before upserting", async () => {
     mockGetValidToken.mockResolvedValue({ accessToken: "tok" });
-    mockFetchLikedSongs.mockResolvedValue([
-      {
-        spotifyId: "sp1",
-        name: "S",
-        artist: "A",
-        album: "Al",
-        albumArtUrl: null,
-        likedAt: "2024-06-15T00:00:00.000Z",
-      },
-    ]);
+    mockFetchLikedSongs.mockResolvedValue([makeSong()]);
     mockUpsertMany.mockResolvedValue(undefined);
     mockUpdateSyncStatus.mockResolvedValue(undefined);
 
@@ -139,7 +135,7 @@ describe("syncLibrary", () => {
     const upsertedSongs = mockUpsertMany.mock.calls[0]![1];
     expect(upsertedSongs[0].likedAt).toBeInstanceOf(Date);
     expect(upsertedSongs[0].likedAt.toISOString()).toBe(
-      "2024-06-15T00:00:00.000Z"
+      "2024-01-01T00:00:00.000Z"
     );
   });
 });
