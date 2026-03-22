@@ -128,6 +128,52 @@ describe("trackRepository", () => {
     });
   });
 
+  describe("findStaleWithArtists", () => {
+    it("queries tracks with artist join", async () => {
+      const expected = [
+        { id: "t1", spotifyId: "s1", name: "Song 1", artist: "Artist 1", enrichmentVersion: 0 },
+      ];
+      execute.mockResolvedValue(expected);
+
+      const result = await trackRepository.findStaleWithArtists(1, 500);
+
+      expect(result).toEqual(expected);
+      expect(selectFrom).toHaveBeenCalledWith("track");
+    });
+  });
+
+  describe("updateClaudeClassification", () => {
+    it("updates each track with classification data", async () => {
+      execute.mockResolvedValue([]);
+
+      await trackRepository.updateClaudeClassification([
+        {
+          id: "t1",
+          claudeMood: "melancholic",
+          claudeEnergy: "low",
+          claudeDanceability: "low",
+          claudeVibeTags: ["late-night", "rainy-day"],
+        },
+        {
+          id: "t2",
+          claudeMood: "uplifting",
+          claudeEnergy: "high",
+          claudeDanceability: "high",
+          claudeVibeTags: ["summer", "driving"],
+        },
+      ]);
+
+      expect(updateTable).toHaveBeenCalledWith("track");
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    it("does nothing for empty array", async () => {
+      await trackRepository.updateClaudeClassification([]);
+
+      expect(updateTable).not.toHaveBeenCalled();
+    });
+  });
+
   describe("setEnrichmentVersion", () => {
     it("updates tracks below target version and returns count", async () => {
       execute.mockResolvedValue([{ numUpdatedRows: BigInt(10) }]);

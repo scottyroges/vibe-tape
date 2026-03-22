@@ -14,7 +14,7 @@ Phase 2 established the enrichment framework with version gating, chunked loops,
 ## Phases and PR Splits
 
 - [x] PR 1: Schema migration + prompt template — `feat/claude-schema-prompt`
-- [ ] PR 2: Claude client + repository methods — `feat/claude-client-repo`
+- [x] PR 2: Claude client + repository methods — `feat/claude-client-repo`
 - [ ] PR 3: Wire step 6b + version bump — `feat/claude-classify-step`
 
 PRs are sequential — each depends on the previous.
@@ -178,6 +178,16 @@ _All resolved during review:_
 - `src/app/(app)/create/confirm/page.test.tsx` — added Claude fields to `makeSong` helper
 - `docs/plans/active/track-enrichment-pipeline.md` — updated Phase 3 schema description (String labels over Float)
 
+**PR 2 — `feat/claude-client-repo`:**
+- `src/lib/claude.ts` — **new** Claude API client with `classifyTracks` function and `ClaudeParseError`
+- `src/repositories/track.repository.ts` — added `findStaleWithArtists` (joins track→trackArtist→artist with STRING_AGG) and `updateClaudeClassification` (batch update of mood/energy/danceability/vibeTags)
+- `tests/lib/claude.test.ts` — **new** tests for JSON parsing, token counts, and error cases
+- `tests/repositories/track.repository.test.ts` — added tests for both new repository methods
+- `docs/ideas/pricing-limit-playlists-not-songs.md` — **new** idea sketch
+- `docs/ideas/sample-cap-for-free-tier.md` — **new** idea sketch
+
 ## Session Notes
 
 **2026-03-22 — PR 1 complete.** Schema migration adds four nullable columns (`claude_mood`, `claude_energy`, `claude_danceability`, `claude_vibe_tags`) to the track table. Prompt template module exports `buildClassifyPrompt` with types for track input and classification results. All existing tests updated with new fields. Parent enrichment plan updated to reflect String types over Float for energy/danceability.
+
+**2026-03-22 — PR 2 complete.** Claude API client module wraps the Anthropic SDK with JSON parsing, typed errors (`ClaudeParseError`), and token usage tracking. Uses Haiku 4.5 model. Two new repository methods support the classification step: `findStaleWithArtists` fetches tracks needing classification with artist names joined via STRING_AGG, and `updateClaudeClassification` writes mood/energy/danceability/vibeTags in a transaction. No retry logic in the client — Inngest step retries handle transient failures.
