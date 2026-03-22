@@ -72,7 +72,7 @@ describe("syncLibrary", () => {
         artist: "Art",
         album: "Alb",
         albumArtUrl: null,
-        addedAt: "2024-01-01T00:00:00.000Z",
+        likedAt: "2024-01-01T00:00:00.000Z",
       },
     ]);
     mockUpsertMany.mockResolvedValue(undefined);
@@ -127,7 +127,7 @@ describe("syncLibrary", () => {
         artist: "A",
         album: "Al",
         albumArtUrl: null,
-        addedAt: "2024-06-15T00:00:00.000Z",
+        likedAt: "2024-06-15T00:00:00.000Z",
       },
     ]);
     mockUpsertMany.mockResolvedValue(undefined);
@@ -137,8 +137,8 @@ describe("syncLibrary", () => {
     await handler({ event: { data: { userId: "u1" } }, step });
 
     const upsertedSongs = mockUpsertMany.mock.calls[0]![1];
-    expect(upsertedSongs[0].addedAt).toBeInstanceOf(Date);
-    expect(upsertedSongs[0].addedAt.toISOString()).toBe(
+    expect(upsertedSongs[0].likedAt).toBeInstanceOf(Date);
+    expect(upsertedSongs[0].likedAt.toISOString()).toBe(
       "2024-06-15T00:00:00.000Z"
     );
   });

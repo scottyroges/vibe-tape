@@ -117,7 +117,7 @@ model LikedSong {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   trackId   String   @map("track_id")
-  addedAt   DateTime @map("added_at")
+  likedAt   DateTime @map("liked_at")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")

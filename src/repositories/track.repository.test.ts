@@ -69,7 +69,7 @@ describe("trackRepository.upsertMany", () => {
         artist: "Artist 1",
         album: "Album 1",
         albumArtUrl: "https://img.com/1.jpg",
-        addedAt: new Date("2024-01-01"),
+        likedAt: new Date("2024-01-01"),
       },
     ];
 
@@ -120,7 +120,7 @@ describe("trackRepository.upsertMany", () => {
       artist: "Artist",
       album: "Album",
       albumArtUrl: null,
-      addedAt: new Date("2024-01-01"),
+      likedAt: new Date("2024-01-01"),
     }));
 
     await trackRepository.upsertMany("user1", songs);

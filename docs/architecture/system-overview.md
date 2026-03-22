@@ -34,6 +34,7 @@ src/
 ├── app/                       # Next.js App Router (routes + layouts only)
 │   ├── (auth)/                # Auth pages (login via Spotify OAuth)
 │   ├── (app)/                 # Authenticated app pages (session-validated layout)
+│   │   ├── create/            # Seed song picker (virtualized liked library)
 │   │   └── dashboard/
 │   ├── api/auth/[...all]/     # Better Auth API handler
 │   ├── api/inngest/           # Inngest serve handler (background job invocation)

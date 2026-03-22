@@ -24,7 +24,7 @@ describe("mapTrack", () => {
       artist: "Artist One",
       album: "Test Album",
       albumArtUrl: "https://img.spotify.com/cover.jpg",
-      addedAt: new Date("2024-01-15T10:30:00Z"),
+      likedAt: new Date("2024-01-15T10:30:00Z"),
     });
   });
 
@@ -68,8 +68,8 @@ describe("mapTrack", () => {
     };
 
     const result = mapTrack(item);
-    expect(result.addedAt).toBeInstanceOf(Date);
-    expect(result.addedAt.toISOString()).toBe("2023-06-15T12:00:00.000Z");
+    expect(result.likedAt).toBeInstanceOf(Date);
+    expect(result.likedAt.toISOString()).toBe("2023-06-15T12:00:00.000Z");
   });
 });
 

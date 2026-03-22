@@ -8,10 +8,10 @@ function makeSpotifyItem(overrides: {
   artists?: { name: string }[];
   albumName?: string;
   albumImages?: { url: string }[];
-  addedAt?: string;
+  likedAt?: string;
 } = {}) {
   return {
-    added_at: overrides.addedAt ?? "2024-01-15T10:30:00Z",
+    added_at: overrides.likedAt ?? "2024-01-15T10:30:00Z",
     track: {
       id: overrides.id ?? "track-1",
       name: overrides.name ?? "Test Song",
@@ -45,7 +45,7 @@ describe("mapTrack", () => {
       artist: "Test Artist",
       album: "Test Album",
       albumArtUrl: "https://img.spotify.com/album.jpg",
-      addedAt: new Date("2024-01-15T10:30:00Z"),
+      likedAt: new Date("2024-01-15T10:30:00Z"),
     });
   });
 

@@ -59,7 +59,7 @@ describe("trackRepository", () => {
           artist: "Artist 1",
           album: "Album 1",
           albumArtUrl: "https://img.spotify.com/1.jpg",
-          addedAt: new Date("2024-01-01"),
+          likedAt: new Date("2024-01-01"),
         },
       ]);
 

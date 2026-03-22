@@ -1,6 +1,6 @@
 # Seed Song Picker UI
 
-**Status:** Not Started
+**Status:** In Progress
 **Created:** 2026-03-21
 **Goal:** Build a searchable, mobile-first song picker page where users select 3–5 seed songs from their liked library to start creating a vibe tape. Refactor the dashboard to show existing vibe tapes and a "Create New" CTA.
 
@@ -10,15 +10,15 @@
 
 New route `/create` that displays the user's full liked library in a fast, scrollable list. Read-only — validates virtualization works with the app-shell scroll container.
 
-- [ ] Install `@tanstack/react-virtual` for virtualized scrolling
-- [ ] Create `/create` route with song picker page
-- [ ] Update `library.list` query to sort by most recently liked (join `likedSong.addedAt`, order descending)
-- [ ] Virtualized list rendering — only mount visible rows. **Note:** TanStack Virtual's `scrollElement` must target the app-shell `.main` container (which has `overflow-y: auto`), not `window`.
-- [ ] Loading and error states — spinner while fetching, error message with retry on failure
-- [ ] Empty state — if no songs, show message with link to dashboard to sync library
-- [ ] Mobile-first layout — full-width list items, large tap targets
-- [ ] Show album art thumbnail (placeholder icon if null), song name, artist per row
-- [ ] Add tests for list rendering
+- [x] Install `@tanstack/react-virtual` for virtualized scrolling
+- [x] Create `/create` route with song picker page
+- [x] Update `library.list` query to sort by most recently liked (join `likedSong.likedAt`, order descending)
+- [x] Virtualized list rendering — only mount visible rows. **Note:** TanStack Virtual's `scrollElement` must target the app-shell `.main` container (which has `overflow-y: auto`), not `window`.
+- [x] Loading and error states — spinner while fetching, error message with retry on failure
+- [x] Empty state — if no songs, show message with link to dashboard to sync library
+- [x] Mobile-first layout — full-width list items, large tap targets
+- [x] Show album art thumbnail (placeholder icon if null), song name, artist per row
+- [x] Add tests for list rendering
 
 **PR:** "Add virtualized song list page"
 
@@ -60,7 +60,7 @@ Restructure the dashboard from a sync-focused page to the main hub: show existin
 - **3–5 seed constraint** — enforced in the UI. The "Continue" button is disabled below 3, selection is blocked above 5.
 - **No component library** — CSS modules (existing pattern) + TanStack Virtual. Keep it lightweight.
 - **Song data already available** — `library.list` tRPC query exists. Needs a sort update but no new endpoints.
-- **Sort order** — most recently liked first (by `likedSong.addedAt` desc). Matches Spotify's default library view.
+- **Sort order** — most recently liked first (by `likedSong.likedAt` desc). Matches Spotify's default library view.
 - **Empty library** — inline empty state with link to dashboard to sync. Don't redirect or duplicate the sync button.
 - **Null album art** — show a placeholder music note icon. Keeps row heights uniform for virtualization.
 - **Selection persistence** — React state on the picker page, encoded as URL params when navigating to `/create/confirm`. No localStorage or server state needed.

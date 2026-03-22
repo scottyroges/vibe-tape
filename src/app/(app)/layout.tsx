@@ -26,7 +26,7 @@ export default async function AppLayout({
           <SignOutButton />
         </div>
       </header>
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main} data-scroll-container>{children}</main>
     </div>
   );
 }

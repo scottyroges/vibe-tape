@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { createId } from "@/lib/id";
-import type { Track } from "@/domain/types";
+import type { Track, TrackWithLikedAt } from "@/domain/types";
 import type { SpotifyLikedSong } from "@/lib/spotify";
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -12,12 +12,14 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export const trackRepository = {
-  async findByUserId(userId: string): Promise<Track[]> {
+  async findByUserId(userId: string): Promise<TrackWithLikedAt[]> {
     return db
       .selectFrom("track")
       .innerJoin("likedSong", "likedSong.trackId", "track.id")
       .where("likedSong.userId", "=", userId)
       .selectAll("track")
+      .select("likedSong.likedAt")
+      .orderBy("likedSong.likedAt", "desc")
       .execute();
   },
 
@@ -95,7 +97,7 @@ export const trackRepository = {
             id: createId(),
             userId,
             trackId,
-            addedAt: song.addedAt,
+            likedAt: song.likedAt,
           };
         });
 

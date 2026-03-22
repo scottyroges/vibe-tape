@@ -25,7 +25,7 @@ export type LikedSong = {
     id: string;
     userId: string;
     trackId: string;
-    addedAt: Timestamp;
+    likedAt: Timestamp;
     createdAt: Generated<Timestamp>;
 };
 export type Playlist = {

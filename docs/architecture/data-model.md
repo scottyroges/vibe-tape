@@ -41,7 +41,7 @@ Join table linking users to tracks. Represents a user's liked song on Spotify.
 Fields:
 - `userId` — References User.
 - `trackId` — References Track.
-- `addedAt` — When the user liked the song on Spotify (used for incremental sync).
+- `likedAt` — When the user liked the song on Spotify (used for incremental sync).
 - Unique constraint on `(userId, trackId)`.
 
 ### Playlist

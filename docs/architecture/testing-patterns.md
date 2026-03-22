@@ -222,11 +222,11 @@ expect(step.run.mock.calls[1]![0]).toBe("fetch-songs");
 
 ```typescript
 it("rehydrates Date fields before upserting", async () => {
-  // fetchLikedSongs returns addedAt as ISO string (simulating serialization)
-  mockFetchLikedSongs.mockResolvedValue([{ addedAt: "2024-06-15T00:00:00.000Z", ... }]);
+  // fetchLikedSongs returns likedAt as ISO string (simulating serialization)
+  mockFetchLikedSongs.mockResolvedValue([{ likedAt: "2024-06-15T00:00:00.000Z", ... }]);
   await handler({ event, step });
   const upsertedSongs = mockUpsertMany.mock.calls[0]![1];
-  expect(upsertedSongs[0].addedAt).toBeInstanceOf(Date);
+  expect(upsertedSongs[0].likedAt).toBeInstanceOf(Date);
 });
 ```
 

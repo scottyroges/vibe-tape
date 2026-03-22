@@ -43,7 +43,7 @@ Build a thin wrapper for Spotify REST calls that handles pagination.
 - [ ] Create `src/lib/spotify.ts` with a `fetchLikedSongs(accessToken)` function
   - Paginate `GET /me/tracks` (Spotify returns 50 per page max)
   - Handle 429 (rate limit) responses with retry-after backoff
-  - Return array of `{ spotifyId, name, artist, album, albumArtUrl, addedAt }`
+  - Return array of `{ spotifyId, name, artist, album, albumArtUrl, likedAt }`
   - Map Spotify's response shape to our domain shape (Spotify nests track data under `track`)
 - [ ] Add tests for the mapper (unit test the response → domain transform, mock fetch)
 
@@ -115,7 +115,7 @@ Expose sync via tRPC and add a button to the dashboard.
 - **No tier cap enforcement yet** — fetch all liked songs regardless of tier. Cap comes later.
 - **Normalized schema** — `track` stores unique Spotify tracks (upsert on `spotifyId`), `liked_song` is the user-track join (upsert on `(userId, trackId)` do nothing). Metadata is shared across users, not duplicated per-user.
 - **Upsert strategy** — tracks upsert on `spotifyId` conflict (updating metadata). Liked songs use do-nothing on conflict since the relationship is immutable.
-- **No incremental sync yet** — full fetch on each sync. Incremental (using `addedAt` watermark) is a future optimization.
+- **No incremental sync yet** — full fetch on each sync. Incremental (using `likedAt` watermark) is a future optimization.
 - **Batch inserts at 500 rows** — avoids Postgres parameter limits on large libraries.
 - **SpotifyLikedSong type** — the Spotify API client type was renamed from `LikedSong` to `SpotifyLikedSong` to avoid collision with the domain `LikedSong` type (the join table model).
 - **Token failure handling** — if `getValidToken` returns null, the Inngest step throws an error. After retries exhaust, job is marked failed in the Inngest dashboard. User sees stale song count and can retry.

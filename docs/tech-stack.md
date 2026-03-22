@@ -77,7 +77,7 @@ Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). 
 | `users` | `id`, `spotify_id`, `email`, `access_token`, `refresh_token`, `token_expires_at`, `tier`, `song_count`, `needs_reauth` |
 | `sessions` | Managed by Better Auth — `id`, `user_id`, `expires_at`, `token` |
 | `track` | `id`, `spotify_id`, `name`, `artist`, `album`, `album_art_url`, `lastfm_genres`, `bpm`, `era` |
-| `liked_song` | `id`, `user_id`, `track_id`, `added_at` |
+| `liked_song` | `id`, `user_id`, `track_id`, `liked_at` |
 | `playlists` | `id`, `user_id`, `spotify_playlist_id`, `vibe_name`, `vibe_description`, `seed_song_ids`, `art_image_url`, `last_synced_at` |
 | `group_sessions` | `id`, `host_user_id`, `participant_ids`, `seed_song_ids`, `status`, `playlist_id`, `expires_at` | Tier 3 — not in schema yet |
 | `guest_passes` | `id`, `created_by_user_id`, `session_id`, `used_at`, `spotify_id` (null until used) | Tier 3 — not in schema yet |
