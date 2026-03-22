@@ -14,8 +14,8 @@ Vibe analysis (roadmap item 4) requires Claude to return structured scoring crit
 
 | Source | Data | Cost | Coverage |
 |--------|------|------|----------|
-| **Spotify** `/me/tracks` | popularity, release_date (→ era), duration_ms | Free | 100% — already in the response we fetch |
-| **Spotify** `/artists` | genres (array per artist) | Free | ~90% of artists |
+| **Spotify** `/me/tracks` | spotifyPopularity, spotifyReleaseDate (→ derivedEra), spotifyDurationMs | Free | 100% — already in the response we fetch |
+| **Spotify** `/artists` | spotifyGenres (array per artist) | Free | ~90% of artists |
 | **Last.fm** `track.getInfo` | genre tags (user-contributed) | Free | Good for popular tracks |
 | **Claude** (Haiku 4.5, Batch API) | mood, energy, danceability, vibe descriptors | ~$0.03/user library | ~99% — anything Claude recognizes |
 
@@ -135,15 +135,15 @@ Normalize artists into their own table, expand the Spotify data we extract, and 
   - New `Artist` table: `id` (cuid), `spotifyId` (@unique), `name`, `spotifyGenres` (String[]), `lastfmTags` (String[]), `enrichmentVersion` (Int, default 0), `enrichedAt` (DateTime?)
   - New `TrackArtist` join table: `trackId`, `artistId`, `order` (Int — preserves artist credit ordering). Unique on `(trackId, artistId)`.
   - Drop `artist` (String) column on Track
-  - Add Track columns: `popularity` (Int?), `durationMs` (Int?), `releaseDate` (String?), `enrichmentVersion` (Int, default 0), `enrichedAt` (DateTime?)
+  - Add Track columns: `spotifyPopularity` (Int?), `spotifyDurationMs` (Int?), `spotifyReleaseDate` (String?), `enrichmentVersion` (Int, default 0), `enrichedAt` (DateTime?)
   - Change `lastfmGenres` (String?) → `lastfmTags` (String[]) on Track
   - Drop `bpm` column — no reliable source available (Spotify audio features deprecated, Last.fm doesn't have it)
-  - Keep existing `era` column
+  - Rename `era` → `derivedEra`
 
 ### Spotify Data Extraction Changes
 
 - [ ] **Update `SpotifyLikedTrackItem` type** — expand to include `track.popularity`, `track.duration_ms`, `track.album.release_date`, and `track.artists[].id` (currently only captures `name`)
-- [ ] **Update `mapTrack()` return type** — new `SpotifyLikedSong` includes `popularity`, `durationMs`, `releaseDate`, and `artists: { spotifyId, name }[]` (array instead of joined string)
+- [ ] **Update `mapTrack()` return type** — new `SpotifyLikedSong` includes `spotifyPopularity`, `spotifyDurationMs`, `spotifyReleaseDate`, and `artists: { spotifyId, name }[]` (array instead of joined string)
 - [ ] **Refactor `fetchLikedSongs`** — add optional `startUrl` (Spotify pagination cursor) and `maxTracks` limit params. Returns `{ songs: SpotifyLikedSong[], nextUrl: string | null }` instead of a flat array. Caller uses `nextUrl` to continue in the next chunk.
 
 ### Sync Pipeline (Steps 1–4)
@@ -153,7 +153,7 @@ Normalize artists into their own table, expand the Spotify data we extract, and 
 - [ ] **Step 4 (upsert-data)** — replace current `upsert-songs`. Per 500-track transaction:
   1. Deduplicate artists → bulk INSERT artist ON CONFLICT UPDATE name
   2. SELECT artist IDs → build spotifyArtistId → artistId map
-  3. Bulk INSERT track ON CONFLICT UPDATE name, album, albumArtUrl, popularity, durationMs, releaseDate
+  3. Bulk INSERT track ON CONFLICT UPDATE name, album, albumArtUrl, spotifyPopularity, spotifyDurationMs, spotifyReleaseDate
   4. SELECT track IDs → build spotifyTrackId → trackId map
   5. Bulk INSERT track_artist ON CONFLICT DO NOTHING
   6. Bulk INSERT liked_song ON CONFLICT DO NOTHING
@@ -161,7 +161,7 @@ Normalize artists into their own table, expand the Spotify data we extract, and 
 
 ### Domain Type Updates
 
-- [ ] **Update `src/domain/song.ts`** — `Track` type: drop `artist: string`, add `popularity`, `durationMs`, `releaseDate`, `era`, `enrichmentVersion`, `enrichedAt`, `lastfmTags` (String[]), add `spotifyGenres` (String[]) to Artist type. `TrackWithLikedAt` keeps `artist: string` — populated by the query via STRING_AGG, not the column.
+- [ ] **Update `src/domain/song.ts`** — `Track` type: drop `artist: string`, add `spotifyPopularity`, `spotifyDurationMs`, `spotifyReleaseDate`, `derivedEra`, `enrichmentVersion`, `enrichedAt`, `lastfmTags` (String[]), add `spotifyGenres` (String[]) to Artist type. `TrackWithLikedAt` keeps `artist: string` — populated by the query via STRING_AGG, not the column.
 - [ ] **Add `Artist` and `TrackArtist` domain types**
 
 ### Query Layer Changes
@@ -199,7 +199,7 @@ Add the version-gated enrichment framework and the first two enrichment sources:
 ### Track Enrichment (Steps 6a–6d)
 
 - [ ] **Era derivation** — pure function: `"2023-06-15" → "2020s"`, `"1995" → "1990s"`, `null → null`
-- [ ] **Step 6a (era)** — derive from releaseDate in app code. Pure DB, chunk 1,000/step.
+- [ ] **Step 6a (derivedEra)** — derive from `spotifyReleaseDate` in app code. Pure DB, chunk 1,000/step.
 - [ ] **Step 6b (claude-classify)** — placeholder no-op until Phase 3 adds Claude client.
 - [ ] **Step 6c (lastfm-tags)** — placeholder no-op until Phase 4 adds Last.fm client.
 - [ ] **Step 6d (set-version)** — bulk UPDATE `enrichmentVersion` + `enrichedAt` for all tracks processed. Chunk 1,000/step.
@@ -219,7 +219,7 @@ Add the version-gated enrichment framework and the first two enrichment sources:
 
 Implements **Step 6b (enrich-tracks/claude-classify)** in the sync pipeline.
 
-- [ ] **Prisma migration** — add to Track: `mood` (String?), `energy` (Float?), `danceability` (Float?), `vibeTags` (String[]). Exact dimensions TBD after experimentation.
+- [ ] **Prisma migration** — add to Track: `claudeMood` (String?), `claudeEnergy` (Float?), `claudeDanceability` (Float?), `claudeVibeTags` (String[]). Exact dimensions TBD after experimentation.
 - [ ] **Prompt template** — `src/lib/prompts/classify-tracks.ts`. Exported function takes `{ name, artist }[]`, returns system + user prompt strings. Easy to iterate without touching calling code.
 - [ ] **Claude client** — `src/lib/claude.ts`. Calls Haiku with structured output (JSON mode). Handles retries.
 - [ ] **Step 6b implementation** — chunk 500 tracks/step, split into 10 Claude batches of 50. ~1,000 input + ~1,500 output tokens per batch. Parse and validate response, skip on parse errors. Bulk UPDATE per chunk.
@@ -259,6 +259,7 @@ Implements **Step 5b (enrich-artists/lastfm-tags)** and **Step 6c (enrich-tracks
 - **Postgres arrays for tags/genres** — stored as `text[]` (Prisma `String[]`). Queryable with `&&` (overlaps) and `@>` (contains) operators. Avoids LIKE hacks on comma-separated strings and doesn't need extra join tables. Example: `WHERE spotify_genres && ARRAY['pop', 'indie-rock']` finds any artist with either genre. **Skip GIN indexes for now** — tables are too small to benefit at MVP scale. Add them when building playlist generation queries (roadmap item 5) where we'll filter across multiple array columns.
 - **Claude prompt as code** — lives in a dedicated file, not buried in service logic. This is the experimentation surface for vibe quality.
 - **Extensible by adding sub-steps** — new data sources are just new Inngest sub-steps in the sync function + new columns. No architecture changes needed.
+- **Source-prefixed column names** — every enrichment column is prefixed with its data source: `spotifyPopularity`, `spotifyDurationMs`, `spotifyReleaseDate`, `spotifyGenres`, `lastfmTags`, `claudeMood`, `claudeEnergy`, `claudeDanceability`, `claudeVibeTags`, `derivedEra`. Makes provenance unambiguous in queries and avoids rename churn if a second source is added for the same dimension.
 - **All enrichment DB writes must be idempotent** — use UPDATE ... WHERE id IN (...), not INSERT. Steps can be retried mid-way through a chunk (e.g., timeout after 200 of 500 artists). On retry the full chunk re-runs, so writes must safely overwrite existing data.
 
 ## Open Questions
