@@ -219,7 +219,7 @@ Add the version-gated enrichment framework and the first two enrichment sources:
 
 Implements **Step 6b (enrich-tracks/claude-classify)** in the sync pipeline.
 
-- [ ] **Prisma migration** — add to Track: `claudeMood` (String?), `claudeEnergy` (Float?), `claudeDanceability` (Float?), `claudeVibeTags` (String[]). Exact dimensions TBD after experimentation.
+- [ ] **Prisma migration** — add to Track: `claudeMood` (String?), `claudeEnergy` (String?, "low"/"medium"/"high"), `claudeDanceability` (String?, "low"/"medium"/"high"), `claudeVibeTags` (String[]). String labels chosen over floats — simpler to prompt for and query.
 - [ ] **Prompt template** — `src/lib/prompts/classify-tracks.ts`. Exported function takes `{ name, artist }[]`, returns system + user prompt strings. Easy to iterate without touching calling code.
 - [ ] **Claude client** — `src/lib/claude.ts`. Calls Haiku with structured output (JSON mode). Handles retries.
 - [ ] **Step 6b implementation** — chunk 500 tracks/step, split into 10 Claude batches of 50. ~1,000 input + ~1,500 output tokens per batch. Parse and validate response, skip on parse errors. Bulk UPDATE per chunk.
