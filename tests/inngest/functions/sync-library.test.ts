@@ -6,26 +6,34 @@ const {
   mockFetchArtists,
   mockUpsertMany,
   mockTrackFindStale,
+  mockTrackFindStaleWithArtists,
   mockTrackUpdateDerivedEra,
+  mockTrackUpdateClaudeClassification,
   mockTrackSetEnrichmentVersion,
   mockArtistFindStale,
   mockArtistUpdateGenres,
   mockArtistSetEnrichmentVersion,
   mockUpdateSyncStatus,
   mockSetSyncStatus,
+  mockBuildClassifyPrompt,
+  mockClassifyTracks,
 } = vi.hoisted(() => ({
   mockGetValidToken: vi.fn(),
   mockFetchLikedSongs: vi.fn(),
   mockFetchArtists: vi.fn(),
   mockUpsertMany: vi.fn(),
   mockTrackFindStale: vi.fn(),
+  mockTrackFindStaleWithArtists: vi.fn(),
   mockTrackUpdateDerivedEra: vi.fn(),
+  mockTrackUpdateClaudeClassification: vi.fn(),
   mockTrackSetEnrichmentVersion: vi.fn(),
   mockArtistFindStale: vi.fn(),
   mockArtistUpdateGenres: vi.fn(),
   mockArtistSetEnrichmentVersion: vi.fn(),
   mockUpdateSyncStatus: vi.fn(),
   mockSetSyncStatus: vi.fn(),
+  mockBuildClassifyPrompt: vi.fn(),
+  mockClassifyTracks: vi.fn(),
 }));
 
 vi.mock("@/lib/spotify-token", () => ({
@@ -38,7 +46,7 @@ vi.mock("@/lib/spotify", () => ({
 }));
 
 vi.mock("@/lib/enrichment", () => ({
-  CURRENT_ENRICHMENT_VERSION: 1,
+  CURRENT_ENRICHMENT_VERSION: 2,
   deriveEra: (date: string | null) => {
     if (!date) return null;
     const year = parseInt(date.slice(0, 4), 10);
@@ -47,11 +55,21 @@ vi.mock("@/lib/enrichment", () => ({
   },
 }));
 
+vi.mock("@/lib/prompts/classify-tracks", () => ({
+  buildClassifyPrompt: mockBuildClassifyPrompt,
+}));
+
+vi.mock("@/lib/claude", () => ({
+  classifyTracks: mockClassifyTracks,
+}));
+
 vi.mock("@/repositories/track.repository", () => ({
   trackRepository: {
     upsertMany: mockUpsertMany,
     findStale: mockTrackFindStale,
+    findStaleWithArtists: mockTrackFindStaleWithArtists,
     updateDerivedEra: mockTrackUpdateDerivedEra,
+    updateClaudeClassification: mockTrackUpdateClaudeClassification,
     setEnrichmentVersion: mockTrackSetEnrichmentVersion,
   },
 }));
@@ -117,9 +135,13 @@ function setupDefaultMocks() {
   mockArtistUpdateGenres.mockResolvedValue(undefined);
   mockArtistSetEnrichmentVersion.mockResolvedValue(0);
   mockTrackFindStale.mockResolvedValue([]);
+  mockTrackFindStaleWithArtists.mockResolvedValue([]);
   mockTrackUpdateDerivedEra.mockResolvedValue(undefined);
+  mockTrackUpdateClaudeClassification.mockResolvedValue(undefined);
   mockTrackSetEnrichmentVersion.mockResolvedValue(0);
   mockFetchArtists.mockResolvedValue(new Map());
+  mockBuildClassifyPrompt.mockReturnValue({ system: "sys", user: "usr" });
+  mockClassifyTracks.mockResolvedValue({ results: [], inputTokens: 0, outputTokens: 0 });
 }
 
 describe("syncLibrary", () => {
@@ -151,6 +173,7 @@ describe("syncLibrary", () => {
       "enrich-artists/spotify-genres-0",
       "enrich-artists/set-version-0",
       "enrich-tracks/era-0",
+      "enrich-tracks/claude-classify-0",
       "enrich-tracks/set-version-0",
       "update-status",
     ]);
@@ -284,5 +307,83 @@ describe("syncLibrary", () => {
     expect(upsertedSongs[0].likedAt.toISOString()).toBe(
       "2024-01-01T00:00:00.000Z"
     );
+  });
+
+  it("classifies tracks with mocked Claude response", async () => {
+    mockTrackFindStaleWithArtists.mockResolvedValueOnce([
+      { id: "t1", name: "Song A", artist: "Artist A", enrichmentVersion: 0 },
+      { id: "t2", name: "Song B", artist: "Artist B", enrichmentVersion: 0 },
+    ]);
+
+    mockClassifyTracks.mockResolvedValueOnce({
+      results: [
+        { mood: "uplifting", energy: "high", danceability: "medium", vibeTags: ["summer", "driving"] },
+        { mood: "melancholic", energy: "low", danceability: "low", vibeTags: ["late-night", "rainy-day"] },
+      ],
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    expect(mockBuildClassifyPrompt).toHaveBeenCalledWith([
+      { name: "Song A", artist: "Artist A" },
+      { name: "Song B", artist: "Artist B" },
+    ]);
+    expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
+      { id: "t1", claudeMood: "uplifting", claudeEnergy: "high", claudeDanceability: "medium", claudeVibeTags: ["summer", "driving"] },
+      { id: "t2", claudeMood: "melancholic", claudeEnergy: "low", claudeDanceability: "low", claudeVibeTags: ["late-night", "rainy-day"] },
+    ]);
+  });
+
+  it("skips tracks with invalid Claude response", async () => {
+    mockTrackFindStaleWithArtists.mockResolvedValueOnce([
+      { id: "t1", name: "Song A", artist: "Artist A", enrichmentVersion: 0 },
+      { id: "t2", name: "Song B", artist: "Artist B", enrichmentVersion: 0 },
+    ]);
+
+    mockClassifyTracks.mockResolvedValueOnce({
+      results: [
+        { mood: "uplifting", energy: "high", danceability: "medium", vibeTags: ["summer"] },
+        { mood: "", energy: "invalid", danceability: "low", vibeTags: [] }, // invalid: empty mood, bad energy, empty vibeTags
+      ],
+      inputTokens: 50,
+      outputTokens: 25,
+    });
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
+      { id: "t1", claudeMood: "uplifting", claudeEnergy: "high", claudeDanceability: "medium", claudeVibeTags: ["summer"] },
+    ]);
+  });
+
+  it("chunks classification at 500-track boundary", async () => {
+    const staleTracks = Array.from({ length: 500 }, (_, i) => ({
+      id: `t${i}`,
+      name: `Song ${i}`,
+      artist: `Artist ${i}`,
+      enrichmentVersion: 0,
+    }));
+    mockTrackFindStaleWithArtists
+      .mockResolvedValueOnce(staleTracks)
+      .mockResolvedValueOnce([]);
+
+    mockClassifyTracks.mockResolvedValue({
+      results: [],
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    const stepNames = step.run.mock.calls.map(
+      (call: unknown[]) => call[0]
+    );
+    expect(stepNames).toContain("enrich-tracks/claude-classify-0");
+    expect(stepNames).toContain("enrich-tracks/claude-classify-500");
   });
 });

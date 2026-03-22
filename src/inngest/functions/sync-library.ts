@@ -2,6 +2,8 @@ import { inngest } from "@/lib/inngest";
 import { getValidToken } from "@/lib/spotify-token";
 import { fetchLikedSongs, fetchArtists } from "@/lib/spotify";
 import { CURRENT_ENRICHMENT_VERSION, deriveEra } from "@/lib/enrichment";
+import { buildClassifyPrompt } from "@/lib/prompts/classify-tracks";
+import { classifyTracks } from "@/lib/claude";
 import { trackRepository } from "@/repositories/track.repository";
 import { artistRepository } from "@/repositories/artist.repository";
 import { userRepository } from "@/repositories/user.repository";
@@ -9,7 +11,30 @@ import { userRepository } from "@/repositories/user.repository";
 const FETCH_CHUNK_SIZE = 2000;
 const ARTIST_GENRE_CHUNK_SIZE = 500;
 const TRACK_ERA_CHUNK_SIZE = 1000;
+const CLAUDE_CLASSIFY_CHUNK_SIZE = 500;
+const CLAUDE_BATCH_SIZE = 50;
 const SET_VERSION_CHUNK_SIZE = 1000;
+
+const VALID_ENERGY_VALUES = new Set(["low", "medium", "high"]);
+
+function isValidClassification(c: unknown): c is {
+  mood: string;
+  energy: "low" | "medium" | "high";
+  danceability: "low" | "medium" | "high";
+  vibeTags: string[];
+} {
+  if (!c || typeof c !== "object") return false;
+  const obj = c as Record<string, unknown>;
+  return (
+    typeof obj.mood === "string" &&
+    obj.mood.length > 0 &&
+    VALID_ENERGY_VALUES.has(obj.energy as string) &&
+    VALID_ENERGY_VALUES.has(obj.danceability as string) &&
+    Array.isArray(obj.vibeTags) &&
+    obj.vibeTags.length > 0 &&
+    obj.vibeTags.every((t: unknown) => typeof t === "string")
+  );
+}
 
 export const syncLibrary = inngest.createFunction(
   {
@@ -165,7 +190,59 @@ export const syncLibrary = inngest.createFunction(
       trackEraOffset += TRACK_ERA_CHUNK_SIZE;
     }
 
-    // Step 6b: Claude classify (Phase 3 — no-op)
+    // Step 6b: Claude classify
+    let claudeOffset = 0;
+    while (true) {
+      const processed = await step.run(
+        `enrich-tracks/claude-classify-${claudeOffset}`,
+        async () => {
+          const stale = await trackRepository.findStaleWithArtists(
+            CURRENT_ENRICHMENT_VERSION,
+            CLAUDE_CLASSIFY_CHUNK_SIZE
+          );
+          if (stale.length === 0) return 0;
+
+          const updates: {
+            id: string;
+            claudeMood: string;
+            claudeEnergy: string;
+            claudeDanceability: string;
+            claudeVibeTags: string[];
+          }[] = [];
+
+          for (let i = 0; i < stale.length; i += CLAUDE_BATCH_SIZE) {
+            const batch = stale.slice(i, i + CLAUDE_BATCH_SIZE);
+            const { system, user } = buildClassifyPrompt(
+              batch.map((t) => ({ name: t.name, artist: t.artist }))
+            );
+            const { results, inputTokens, outputTokens } =
+              await classifyTracks(system, user);
+
+            console.log(
+              `Claude classify batch ${i / CLAUDE_BATCH_SIZE}: ${inputTokens} input, ${outputTokens} output tokens`
+            );
+
+            for (let j = 0; j < batch.length && j < results.length; j++) {
+              const classification = results[j];
+              if (!isValidClassification(classification)) continue;
+              updates.push({
+                id: batch[j]!.id,
+                claudeMood: classification.mood,
+                claudeEnergy: classification.energy,
+                claudeDanceability: classification.danceability,
+                claudeVibeTags: classification.vibeTags,
+              });
+            }
+          }
+
+          await trackRepository.updateClaudeClassification(updates);
+          return stale.length;
+        }
+      );
+      if (processed < CLAUDE_CLASSIFY_CHUNK_SIZE) break;
+      claudeOffset += CLAUDE_CLASSIFY_CHUNK_SIZE;
+    }
+
     // Step 6c: Last.fm tags (Phase 4 — no-op)
 
     // Step 6d: Set track enrichment version

@@ -3,8 +3,8 @@ import { describe, it, expect } from "vitest";
 import { CURRENT_ENRICHMENT_VERSION, deriveEra } from "@/lib/enrichment";
 
 describe("CURRENT_ENRICHMENT_VERSION", () => {
-  it("exports version 1", () => {
-    expect(CURRENT_ENRICHMENT_VERSION).toBe(1);
+  it("exports version 2", () => {
+    expect(CURRENT_ENRICHMENT_VERSION).toBe(2);
   });
 });
 
