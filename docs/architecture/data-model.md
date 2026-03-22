@@ -36,30 +36,31 @@ Fields:
 ### Track
 A unique Spotify track. Tracks are shared across users — multiple users can like the same track without duplicating metadata. Artists are linked via the TrackArtist join table rather than stored as a string column.
 
-Fields:
-- `spotifyId` — Spotify track ID. Globally unique (`@unique`).
-- `spotifyPopularity` — Spotify popularity score (0-100), nullable.
-- `spotifyDurationMs` — Track duration in milliseconds, nullable.
-- `spotifyReleaseDate` — Album release date as string (e.g., "2024-01-01"), nullable.
-- `derivedEra` — Decade/era classification, computed during enrichment.
-- `claudeMood` — Single-word mood descriptor (e.g., "melancholic", "uplifting"), nullable. Classified by Claude Haiku during enrichment.
-- `claudeEnergy` — Energy level: "low", "medium", or "high", nullable.
-- `claudeDanceability` — Danceability level: "low", "medium", or "high", nullable.
-- `claudeVibeTags` — Array of 2-5 short vibe descriptors (e.g., "late-night", "driving"). Defaults to empty array.
-- `lastfmTags` — Array of tag strings from Last.fm (populated during enrichment).
-- `enrichmentVersion` — Integer tracking which enrichment pipeline version last processed this track. Default 0 (unenriched).
-- `enrichedAt` — Timestamp of last enrichment run.
+Core fields: `spotifyId` (unique), `name`, `album`, `albumArtUrl`.
+
+Vibe profile fields (derived from enrichment data, used for playlist generation):
+- `vibeMood`, `vibeEnergy`, `vibeDanceability` — Summarized from Claude classification.
+- `vibeGenres`, `vibeTags` — Merged genre/tag arrays from all enrichment sources.
+- `vibeVersion` — Tracks which derivation logic produced the current vibe profile. Default 0.
+- `vibeUpdatedAt` — When the vibe profile was last recomputed.
+
+Source-specific enrichment data lives in separate tables (see Enrichment Tables below).
 
 ### Artist
-A unique Spotify artist. Artists are shared across tracks — the same artist can appear on many tracks without duplicating metadata. Like Track, Artist carries its own enrichment version for the enrichment pipeline.
+A unique Spotify artist. Artists are shared across tracks — the same artist can appear on many tracks without duplicating metadata.
 
-Fields:
-- `spotifyId` — Spotify artist ID. Globally unique (`@unique`).
-- `name` — Display name from Spotify, updated on each sync.
-- `spotifyGenres` — Array of genre strings from the Spotify artist endpoint (populated during enrichment).
-- `lastfmTags` — Array of tag strings from Last.fm (populated during enrichment).
-- `enrichmentVersion` — Integer tracking which enrichment pipeline version last processed this artist. Default 0.
-- `enrichedAt` — Timestamp of last enrichment run.
+Fields: `spotifyId` (unique), `name`. Source-specific enrichment data lives in separate tables (see Enrichment Tables below).
+
+### Enrichment Tables
+Enrichment data is stored in per-source tables rather than as columns on Track/Artist. Each table has its own `version` and `enrichedAt` fields, allowing sources to be re-enriched independently. All use the parent entity's ID as their primary key (1:1 relationship) with `onDelete: Cascade`. Repository methods use upsert (`INSERT ... ON CONFLICT DO UPDATE`) to write enrichment data.
+
+- **TrackSpotifyEnrichment** — `popularity`, `durationMs`, `releaseDate`, `derivedEra` (computed from release date).
+- **TrackClaudeEnrichment** — `mood`, `energy`, `danceability`, `vibeTags`. Classified by Claude Haiku.
+- **TrackLastfmEnrichment** — `tags` array from Last.fm.
+- **ArtistSpotifyEnrichment** — `genres` array from the Spotify artist endpoint.
+- **ArtistLastfmEnrichment** — `tags` array from Last.fm.
+
+Version constants are defined per-source in `src/lib/enrichment.ts` (`SPOTIFY_ENRICHMENT_VERSION`, `CLAUDE_ENRICHMENT_VERSION`, `LASTFM_ENRICHMENT_VERSION`, `VIBE_DERIVATION_VERSION`).
 
 ### TrackArtist
 Join table linking tracks to artists with ordering. A track's primary artist is at position 0, featured artists follow.

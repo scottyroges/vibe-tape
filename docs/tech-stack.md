@@ -76,7 +76,12 @@ Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). 
 |-------|-----------|
 | `users` | `id`, `spotify_id`, `email`, `access_token`, `refresh_token`, `token_expires_at`, `tier`, `song_count`, `needs_reauth` |
 | `sessions` | Managed by Better Auth — `id`, `user_id`, `expires_at`, `token` |
-| `track` | `id`, `spotify_id`, `name`, `artist`, `album`, `album_art_url`, `derived_era`, `claude_mood`, `claude_energy`, `claude_danceability`, `claude_vibe_tags`, `lastfm_tags`, `enrichment_version` |
+| `track` | `id`, `spotify_id`, `name`, `album`, `album_art_url`, `vibe_mood`, `vibe_energy`, `vibe_danceability`, `vibe_genres`, `vibe_tags`, `vibe_version` |
+| `track_spotify_enrichment` | `track_id` (PK/FK), `popularity`, `duration_ms`, `release_date`, `derived_era`, `version` |
+| `track_claude_enrichment` | `track_id` (PK/FK), `mood`, `energy`, `danceability`, `vibe_tags`, `version` |
+| `track_lastfm_enrichment` | `track_id` (PK/FK), `tags`, `version` |
+| `artist_spotify_enrichment` | `artist_id` (PK/FK), `genres`, `version` |
+| `artist_lastfm_enrichment` | `artist_id` (PK/FK), `tags`, `version` |
 | `liked_song` | `id`, `user_id`, `track_id`, `liked_at` |
 | `playlists` | `id`, `user_id`, `spotify_playlist_id`, `vibe_name`, `vibe_description`, `seed_song_ids`, `art_image_url`, `last_synced_at` |
 | `group_sessions` | `id`, `host_user_id`, `participant_ids`, `seed_song_ids`, `status`, `playlist_id`, `expires_at` | Tier 3 — not in schema yet |
