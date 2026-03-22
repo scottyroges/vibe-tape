@@ -4,6 +4,8 @@ import { fetchLikedSongs } from "@/lib/spotify";
 import { trackRepository } from "@/repositories/track.repository";
 import { userRepository } from "@/repositories/user.repository";
 
+const FETCH_CHUNK_SIZE = 2000;
+
 export const syncLibrary = inngest.createFunction(
   {
     id: "sync-library",
@@ -39,25 +41,46 @@ export const syncLibrary = inngest.createFunction(
       return result;
     });
 
-    const songs = await step.run("fetch-songs", async () => {
-      return fetchLikedSongs(token.accessToken);
-    });
+    // Fetch and upsert in chunks to keep memory bounded.
+    // Each iteration: fetch up to FETCH_CHUNK_SIZE songs, then upsert immediately.
+    // The track repository handles internal 500-song batching.
+    let totalSynced = 0;
+    let fetchOffset = 0;
+    let nextUrl: string | null = null;
 
-    await step.run("upsert-songs", async () => {
+    while (true) {
+      const result = await step.run(
+        `fetch-songs-${fetchOffset}`,
+        async () => {
+          return fetchLikedSongs(token.accessToken, {
+            startUrl: nextUrl ?? undefined,
+            maxTracks: FETCH_CHUNK_SIZE,
+          });
+        }
+      );
+
       // Inngest serializes step outputs to JSON, so Date becomes string.
-      // Rehydrate likedAt before passing to the repository.
-      const rehydrated = songs.map((s) => ({
+      const rehydrated = result.songs.map((s) => ({
         ...s,
         likedAt: new Date(s.likedAt),
       }));
-      await trackRepository.upsertMany(userId, rehydrated);
-    });
+
+      await step.run(`upsert-data-${fetchOffset}`, async () => {
+        await trackRepository.upsertMany(userId, rehydrated);
+      });
+
+      totalSynced += result.songs.length;
+      nextUrl = result.nextUrl;
+      fetchOffset += result.songs.length;
+
+      if (!result.nextUrl) break;
+    }
 
     await step.run("update-status", async () => {
       await userRepository.updateSyncMetrics(userId);
       await userRepository.setSyncStatus(userId, "IDLE");
     });
 
-    return { synced: songs.length };
+    return { synced: totalSynced };
   }
 );

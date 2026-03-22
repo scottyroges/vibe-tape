@@ -43,6 +43,15 @@ export const trackRepository = {
       .execute();
   },
 
+  async findStale(version: number, limit: number): Promise<Track[]> {
+    return db
+      .selectFrom("track")
+      .where("enrichmentVersion", "<", version)
+      .selectAll()
+      .limit(limit)
+      .execute();
+  },
+
   async countByUserId(userId: string): Promise<number> {
     const result = await db
       .selectFrom("likedSong")

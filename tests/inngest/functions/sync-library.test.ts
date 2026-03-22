@@ -77,9 +77,12 @@ describe("syncLibrary", () => {
     opts: { onFailure: (...args: unknown[]) => Promise<void> };
   };
 
-  it("orchestrates all steps in order", async () => {
+  it("orchestrates chunked steps in order", async () => {
     mockGetValidToken.mockResolvedValue({ accessToken: "tok-123" });
-    mockFetchLikedSongs.mockResolvedValue([makeSong()]);
+    mockFetchLikedSongs.mockResolvedValue({
+      songs: [makeSong()],
+      nextUrl: null,
+    });
     mockUpsertMany.mockResolvedValue(undefined);
     mockUpdateSyncStatus.mockResolvedValue(undefined);
 
@@ -89,18 +92,62 @@ describe("syncLibrary", () => {
     const result = await handler({ event, step });
 
     expect(result).toEqual({ synced: 1 });
-    expect(step.run).toHaveBeenCalledTimes(5);
-    expect(step.run.mock.calls[0]![0]).toBe("set-syncing");
-    expect(step.run.mock.calls[1]![0]).toBe("get-token");
-    expect(step.run.mock.calls[2]![0]).toBe("fetch-songs");
-    expect(step.run.mock.calls[3]![0]).toBe("upsert-songs");
-    expect(step.run.mock.calls[4]![0]).toBe("update-status");
+
+    const stepNames = step.run.mock.calls.map(
+      (call: unknown[]) => call[0]
+    );
+    expect(stepNames).toEqual([
+      "set-syncing",
+      "get-token",
+      "fetch-songs-0",
+      "upsert-data-0",
+      "update-status",
+    ]);
 
     expect(mockSetSyncStatus).toHaveBeenCalledWith("user-1", "SYNCING");
     expect(mockSetSyncStatus).toHaveBeenCalledWith("user-1", "IDLE");
     expect(mockGetValidToken).toHaveBeenCalledWith("user-1");
-    expect(mockFetchLikedSongs).toHaveBeenCalledWith("tok-123");
     expect(mockUpdateSyncStatus).toHaveBeenCalledWith("user-1");
+  });
+
+  it("fetches and upserts multiple chunks when nextUrl is returned", async () => {
+    mockGetValidToken.mockResolvedValue({ accessToken: "tok-123" });
+    mockFetchLikedSongs
+      .mockResolvedValueOnce({
+        songs: [makeSong({ spotifyId: "sp1" })],
+        nextUrl: "https://api.spotify.com/v1/me/tracks?offset=2000",
+      })
+      .mockResolvedValueOnce({
+        songs: [makeSong({ spotifyId: "sp2" })],
+        nextUrl: null,
+      });
+    mockUpsertMany.mockResolvedValue(undefined);
+    mockUpdateSyncStatus.mockResolvedValue(undefined);
+
+    const step = createMockStep();
+    const result = await handler({
+      event: { data: { userId: "user-1" } },
+      step,
+    });
+
+    expect(result).toEqual({ synced: 2 });
+
+    const stepNames = step.run.mock.calls.map(
+      (call: unknown[]) => call[0]
+    );
+    // Fetch and upsert are interleaved per chunk
+    expect(stepNames).toEqual([
+      "set-syncing",
+      "get-token",
+      "fetch-songs-0",
+      "upsert-data-0",
+      "fetch-songs-1",
+      "upsert-data-1",
+      "update-status",
+    ]);
+
+    expect(mockFetchLikedSongs).toHaveBeenCalledTimes(2);
+    expect(mockUpsertMany).toHaveBeenCalledTimes(2);
   });
 
   it("throws without catching when a step fails", async () => {
@@ -125,7 +172,10 @@ describe("syncLibrary", () => {
 
   it("rehydrates Date fields before upserting", async () => {
     mockGetValidToken.mockResolvedValue({ accessToken: "tok" });
-    mockFetchLikedSongs.mockResolvedValue([makeSong()]);
+    mockFetchLikedSongs.mockResolvedValue({
+      songs: [makeSong()],
+      nextUrl: null,
+    });
     mockUpsertMany.mockResolvedValue(undefined);
     mockUpdateSyncStatus.mockResolvedValue(undefined);
 

@@ -52,15 +52,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export type FetchLikedSongsResult = {
+  songs: SpotifyLikedSong[];
+  nextUrl: string | null;
+};
+
 export async function fetchLikedSongs(
-  accessToken: string
-): Promise<SpotifyLikedSong[]> {
+  accessToken: string,
+  opts?: { startUrl?: string; maxTracks?: number }
+): Promise<FetchLikedSongsResult> {
   const MAX_RATE_LIMIT_RETRIES = 3;
+  const maxTracks = opts?.maxTracks ?? Infinity;
   const songs: SpotifyLikedSong[] = [];
-  let url: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
+  let url: string | null =
+    opts?.startUrl ?? "https://api.spotify.com/v1/me/tracks?limit=50";
   let rateLimitRetries = 0;
 
-  while (url) {
+  while (url && songs.length < maxTracks) {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -88,5 +96,6 @@ export async function fetchLikedSongs(
     url = data.next;
   }
 
-  return songs;
+  const truncated = maxTracks < Infinity ? songs.slice(0, maxTracks) : songs;
+  return { songs: truncated, nextUrl: url };
 }
