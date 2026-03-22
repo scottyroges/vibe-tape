@@ -26,6 +26,10 @@
 - **008 Prisma + Kysely:** .personal/docs/decisions/008-query-layer-prisma-kysely.md
 - **009 Async job processing:** .personal/docs/decisions/009-async-job-processing.md
 
+## Ideas
+
+- **Ideas backlog:** .personal/docs/ideas/ — lightweight idea sketches for future features (not committed to roadmap)
+
 ## Work Plans
 
 - **Active work plans:** .personal/docs/plans/active/
