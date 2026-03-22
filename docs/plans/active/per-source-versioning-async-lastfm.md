@@ -316,7 +316,7 @@ export const enrichLastfm = inngest.createFunction(
 
 - [x] PR 1: Schema migration + enrichment constants + repository/sync pipeline updates — `feat/per-source-versions-schema`
 - [ ] ~~PR 2: Update sync pipeline to per-source versioning~~ — folded into PR 1
-- [ ] PR 3: Extract Last.fm into async function — `feat/async-lastfm-enrichment`
+- [x] PR 3: Extract Last.fm into async function — `feat/async-lastfm-enrichment`
 - [ ] PR 4: Vibe profile derivation — `feat/vibe-profile`
 
 PR 1 absorbed the planned PR 2 scope (repository methods and sync pipeline updates). PRs 3 and 4 remain sequential.
@@ -561,3 +561,5 @@ After all 4 PRs:
 ## Files Modified
 
 ## Session Notes
+
+- **PR 3: Skipped dedicated Last.fm enrichment repositories.** The plan called for `track-lastfm-enrichment.repository.ts` and `artist-lastfm-enrichment.repository.ts`, but the relevant methods (`findStale`, `updateLastfmTags`, `setEnrichmentVersion`, `findStaleWithPrimaryArtist`) already exist on `trackRepository` and `artistRepository`. Creating wrapper repos for 2-3 methods each would add indirection without value. The new `enrich-lastfm` function imports directly from the existing repos.

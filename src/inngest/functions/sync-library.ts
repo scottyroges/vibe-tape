@@ -4,19 +4,16 @@ import { fetchLikedSongs, fetchArtists } from "@/lib/spotify";
 import {
   SPOTIFY_ENRICHMENT_VERSION,
   CLAUDE_ENRICHMENT_VERSION,
-  LASTFM_ENRICHMENT_VERSION,
   deriveEra,
 } from "@/lib/enrichment";
 import { buildClassifyPrompt } from "@/lib/prompts/classify-tracks";
 import { classifyTracks } from "@/lib/claude";
-import { getArtistTopTags, getTrackTopTags } from "@/lib/lastfm";
 import { trackRepository } from "@/repositories/track.repository";
 import { artistRepository } from "@/repositories/artist.repository";
 import { userRepository } from "@/repositories/user.repository";
 
 const FETCH_CHUNK_SIZE = 2000;
 const ARTIST_GENRE_CHUNK_SIZE = 500;
-const LASTFM_CHUNK_SIZE = 200;
 const TRACK_ERA_CHUNK_SIZE = 1000;
 const CLAUDE_CLASSIFY_CHUNK_SIZE = 500;
 const CLAUDE_BATCH_SIZE = 50;
@@ -148,44 +145,7 @@ export const syncLibrary = inngest.createFunction(
       artistGenreOffset += ARTIST_GENRE_CHUNK_SIZE;
     }
 
-    // Step 5b: Last.fm artist tags
-    let artistLastfmOffset = 0;
-    while (true) {
-      const processed = await step.run(
-        `enrich-artists/lastfm-tags-${artistLastfmOffset}`,
-        async () => {
-          const stale = await artistRepository.findStale(
-            "artistLastfmEnrichment",
-            LASTFM_ENRICHMENT_VERSION,
-            LASTFM_CHUNK_SIZE
-          );
-          if (stale.length === 0) return 0;
-
-          const updates: { id: string; tags: string[] }[] = [];
-
-          for (const artist of stale) {
-            try {
-              const tags = await getArtistTopTags(artist.name);
-              if (tags.length > 0) {
-                updates.push({ id: artist.id, tags });
-              }
-            } catch (err) {
-              console.warn(
-                `Last.fm artist tag fetch failed for "${artist.name}":`,
-                err instanceof Error ? err.message : err
-              );
-            }
-          }
-
-          await artistRepository.updateLastfmTags(updates);
-          return stale.length;
-        }
-      );
-      if (processed < LASTFM_CHUNK_SIZE) break;
-      artistLastfmOffset += LASTFM_CHUNK_SIZE;
-    }
-
-    // Step 5c: Set artist enrichment versions
+    // Step 5b: Set artist enrichment versions
     let artistSpotifyVersionOffset = 0;
     while (true) {
       const updated = await step.run(
@@ -200,22 +160,6 @@ export const syncLibrary = inngest.createFunction(
       );
       if (updated < SET_VERSION_CHUNK_SIZE) break;
       artistSpotifyVersionOffset += SET_VERSION_CHUNK_SIZE;
-    }
-
-    let artistLastfmVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-artists/set-lastfm-version-${artistLastfmVersionOffset}`,
-        async () => {
-          return artistRepository.setEnrichmentVersion(
-            "artistLastfmEnrichment",
-            LASTFM_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      artistLastfmVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
     // ── Track Enrichment ──
@@ -303,43 +247,7 @@ export const syncLibrary = inngest.createFunction(
       claudeOffset += CLAUDE_CLASSIFY_CHUNK_SIZE;
     }
 
-    // Step 6c: Last.fm track tags
-    let trackLastfmOffset = 0;
-    while (true) {
-      const processed = await step.run(
-        `enrich-tracks/lastfm-tags-${trackLastfmOffset}`,
-        async () => {
-          const stale = await trackRepository.findStaleWithPrimaryArtist(
-            LASTFM_ENRICHMENT_VERSION,
-            LASTFM_CHUNK_SIZE
-          );
-          if (stale.length === 0) return 0;
-
-          const updates: { id: string; tags: string[] }[] = [];
-
-          for (const track of stale) {
-            try {
-              const tags = await getTrackTopTags(track.artist, track.name);
-              if (tags.length > 0) {
-                updates.push({ id: track.id, tags });
-              }
-            } catch (err) {
-              console.warn(
-                `Last.fm track tag fetch failed for "${track.artist} - ${track.name}":`,
-                err instanceof Error ? err.message : err
-              );
-            }
-          }
-
-          await trackRepository.updateLastfmTags(updates);
-          return stale.length;
-        }
-      );
-      if (processed < LASTFM_CHUNK_SIZE) break;
-      trackLastfmOffset += LASTFM_CHUNK_SIZE;
-    }
-
-    // Step 6d: Set track enrichment versions
+    // Step 6c: Set track enrichment versions
     let trackSpotifyVersionOffset = 0;
     while (true) {
       const updated = await step.run(
@@ -372,25 +280,14 @@ export const syncLibrary = inngest.createFunction(
       trackClaudeVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
-    let trackLastfmVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-tracks/set-lastfm-version-${trackLastfmVersionOffset}`,
-        async () => {
-          return trackRepository.setEnrichmentVersion(
-            "trackLastfmEnrichment",
-            LASTFM_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      trackLastfmVersionOffset += SET_VERSION_CHUNK_SIZE;
-    }
-
     await step.run("update-status", async () => {
       await userRepository.updateSyncMetrics(userId);
       await userRepository.setSyncStatus(userId, "IDLE");
+    });
+
+    await step.sendEvent("request-lastfm-enrichment", {
+      name: "enrichment/lastfm.requested",
+      data: {},
     });
 
     return { synced: totalSynced };

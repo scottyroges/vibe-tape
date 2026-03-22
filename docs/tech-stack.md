@@ -142,7 +142,8 @@ The Inngest Dev Server runs as a Docker Compose service alongside Postgres. `doc
 
 ### Jobs
 
-- **Library sync** (`sync-library`) — Fetches a user's Spotify liked songs and upserts to database. Four steps: get token, fetch songs, upsert tracks, update sync status. Triggered by `library/sync.requested` event with `{ userId }`. Idempotent per user with concurrency limit of 1.
+- **Library sync** (`sync-library`) — Fetches a user's Spotify liked songs, upserts to database, and runs Spotify + Claude enrichment. Triggered by `library/sync.requested` event with `{ userId }`. Idempotent per user with concurrency limit of 1. After completing, emits `enrichment/lastfm.requested` to trigger Last.fm enrichment asynchronously.
+- **Last.fm enrichment** (`enrich-lastfm`) — Fetches Last.fm tags for artists and tracks with stale or missing enrichment. Runs independently from library sync with global concurrency of 1 (rate-limit friendly). Dual trigger: the `enrichment/lastfm.requested` event (emitted by sync-library) and a daily cron (`0 0 * * *`) to catch up on any missed enrichment.
 - **Nightly auto-sync** (future) — batch-refresh all users' libraries on a schedule via Vercel cron triggering an Inngest event.
 - **AI art generation** (Tier 2+) — generate vibe card art async after playlist creation. Cache in R2.
 
