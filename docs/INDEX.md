@@ -33,6 +33,7 @@
 ## Work Plans
 
 - **Active work plans:** .personal/docs/plans/active/
+  - Per-Source Versioning, Async Last.fm & Vibe Profile: docs/plans/active/per-source-versioning-async-lastfm.md
 - **Completed work plans:** .personal/docs/plans/completed/
   - Track Enrichment Pipeline (parent plan): docs/plans/completed/track-enrichment-pipeline.md
   - Phase 1 — Artist Model + Expanded Spotify Data: .personal/docs/plans/completed/phase1-artist-model-spotify-data.md
