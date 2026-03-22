@@ -10,4 +10,38 @@ export const artistRepository = {
       .limit(limit)
       .execute();
   },
+
+  async updateGenres(
+    updates: { id: string; spotifyGenres: string[] }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    const now = new Date();
+    for (const { id, spotifyGenres } of updates) {
+      await db
+        .updateTable("artist")
+        .set({ spotifyGenres, updatedAt: now })
+        .where("id", "=", id)
+        .execute();
+    }
+  },
+
+  async setEnrichmentVersion(
+    version: number,
+    limit: number
+  ): Promise<number> {
+    const result = await db
+      .updateTable("artist")
+      .set({ enrichmentVersion: version, enrichedAt: new Date() })
+      .where(
+        "id",
+        "in",
+        db
+          .selectFrom("artist")
+          .select("id")
+          .where("enrichmentVersion", "<", version)
+          .limit(limit)
+      )
+      .execute();
+    return Number(result[0]?.numUpdatedRows ?? 0);
+  },
 };

@@ -52,6 +52,40 @@ export const trackRepository = {
       .execute();
   },
 
+  async updateDerivedEra(
+    updates: { id: string; derivedEra: string }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    const now = new Date();
+    for (const { id, derivedEra } of updates) {
+      await db
+        .updateTable("track")
+        .set({ derivedEra, updatedAt: now })
+        .where("id", "=", id)
+        .execute();
+    }
+  },
+
+  async setEnrichmentVersion(
+    version: number,
+    limit: number
+  ): Promise<number> {
+    const result = await db
+      .updateTable("track")
+      .set({ enrichmentVersion: version, enrichedAt: new Date() })
+      .where(
+        "id",
+        "in",
+        db
+          .selectFrom("track")
+          .select("id")
+          .where("enrichmentVersion", "<", version)
+          .limit(limit)
+      )
+      .execute();
+    return Number(result[0]?.numUpdatedRows ?? 0);
+  },
+
   async countByUserId(userId: string): Promise<number> {
     const result = await db
       .selectFrom("likedSong")
