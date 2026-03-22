@@ -102,19 +102,18 @@ model Track {
   name                String
   album               String
   albumArtUrl         String?       @map("album_art_url")
-  spotifyPopularity   Int?          @map("spotify_popularity")
-  spotifyDurationMs   Int?          @map("spotify_duration_ms")
-  spotifyReleaseDate  String?       @map("spotify_release_date")
-  derivedEra          String?       @map("derived_era")
-  claudeMood          String?       @map("claude_mood")
-  claudeEnergy        String?       @map("claude_energy")
-  claudeDanceability  String?       @map("claude_danceability")
-  claudeVibeTags      String[]      @default([]) @map("claude_vibe_tags")
-  lastfmTags          String[]      @default([]) @map("lastfm_tags")
-  enrichmentVersion   Int           @default(0) @map("enrichment_version")
-  enrichedAt          DateTime?     @map("enriched_at")
+  vibeMood            String?       @map("vibe_mood")
+  vibeEnergy          String?       @map("vibe_energy")
+  vibeDanceability    String?       @map("vibe_danceability")
+  vibeGenres          String[]      @default([]) @map("vibe_genres")
+  vibeTags            String[]      @default([]) @map("vibe_tags")
+  vibeVersion         Int           @default(0) @map("vibe_version")
+  vibeUpdatedAt       DateTime?     @map("vibe_updated_at")
   trackArtists        TrackArtist[]
   likedSongs          LikedSong[]
+  spotifyEnrichment   TrackSpotifyEnrichment?
+  claudeEnrichment    TrackClaudeEnrichment?
+  lastfmEnrichment    TrackLastfmEnrichment?
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
@@ -125,15 +124,69 @@ model Artist {
   id                  String        @id @default(cuid())
   spotifyId           String        @unique @map("spotify_id")
   name                String
-  spotifyGenres       String[]      @default([]) @map("spotify_genres")
-  lastfmTags          String[]      @default([]) @map("lastfm_tags")
-  enrichmentVersion   Int           @default(0) @map("enrichment_version")
-  enrichedAt          DateTime?     @map("enriched_at")
   trackArtists        TrackArtist[]
+  spotifyEnrichment   ArtistSpotifyEnrichment?
+  lastfmEnrichment    ArtistLastfmEnrichment?
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
   @@map("artist")
+}
+
+model TrackSpotifyEnrichment {
+  trackId     String    @id @map("track_id")
+  popularity  Int?
+  durationMs  Int?      @map("duration_ms")
+  releaseDate String?   @map("release_date")
+  derivedEra  String?   @map("derived_era")
+  version     Int       @default(0)
+  enrichedAt  DateTime? @map("enriched_at")
+  track       Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@map("track_spotify_enrichment")
+}
+
+model TrackClaudeEnrichment {
+  trackId      String    @id @map("track_id")
+  mood         String?
+  energy       String?
+  danceability String?
+  vibeTags     String[]  @default([]) @map("vibe_tags")
+  version      Int       @default(0)
+  enrichedAt   DateTime? @map("enriched_at")
+  track        Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@map("track_claude_enrichment")
+}
+
+model TrackLastfmEnrichment {
+  trackId    String    @id @map("track_id")
+  tags       String[]  @default([])
+  version    Int       @default(0)
+  enrichedAt DateTime? @map("enriched_at")
+  track      Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@map("track_lastfm_enrichment")
+}
+
+model ArtistSpotifyEnrichment {
+  artistId   String    @id @map("artist_id")
+  genres     String[]  @default([])
+  version    Int       @default(0)
+  enrichedAt DateTime? @map("enriched_at")
+  artist     Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@map("artist_spotify_enrichment")
+}
+
+model ArtistLastfmEnrichment {
+  artistId   String    @id @map("artist_id")
+  tags       String[]  @default([])
+  version    Int       @default(0)
+  enrichedAt DateTime? @map("enriched_at")
+  artist     Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@map("artist_lastfm_enrichment")
 }
 
 model TrackArtist {

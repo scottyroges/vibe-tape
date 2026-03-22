@@ -1,10 +1,19 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { CURRENT_ENRICHMENT_VERSION, deriveEra } from "@/lib/enrichment";
+import {
+  SPOTIFY_ENRICHMENT_VERSION,
+  CLAUDE_ENRICHMENT_VERSION,
+  LASTFM_ENRICHMENT_VERSION,
+  VIBE_DERIVATION_VERSION,
+  deriveEra,
+} from "@/lib/enrichment";
 
-describe("CURRENT_ENRICHMENT_VERSION", () => {
-  it("exports version 3", () => {
-    expect(CURRENT_ENRICHMENT_VERSION).toBe(3);
+describe("enrichment version constants", () => {
+  it("exports per-source version constants", () => {
+    expect(SPOTIFY_ENRICHMENT_VERSION).toBe(1);
+    expect(CLAUDE_ENRICHMENT_VERSION).toBe(1);
+    expect(LASTFM_ENRICHMENT_VERSION).toBe(1);
+    expect(VIBE_DERIVATION_VERSION).toBe(1);
   });
 });
 

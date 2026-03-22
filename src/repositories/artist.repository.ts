@@ -1,60 +1,111 @@
 import { db } from "@/lib/db";
 import type { Artist } from "@/domain/types";
 
+async function findStaleBySpotify(version: number, limit: number): Promise<Artist[]> {
+  return db
+    .selectFrom("artist")
+    .leftJoin(
+      "artistSpotifyEnrichment",
+      "artistSpotifyEnrichment.artistId",
+      "artist.id"
+    )
+    .where((eb) =>
+      eb.or([
+        eb("artistSpotifyEnrichment.version", "is", null),
+        eb("artistSpotifyEnrichment.version", "<", version),
+      ])
+    )
+    .selectAll("artist")
+    .limit(limit)
+    .execute();
+}
+
+async function findStaleByLastfm(version: number, limit: number): Promise<Artist[]> {
+  return db
+    .selectFrom("artist")
+    .leftJoin(
+      "artistLastfmEnrichment",
+      "artistLastfmEnrichment.artistId",
+      "artist.id"
+    )
+    .where((eb) =>
+      eb.or([
+        eb("artistLastfmEnrichment.version", "is", null),
+        eb("artistLastfmEnrichment.version", "<", version),
+      ])
+    )
+    .selectAll("artist")
+    .limit(limit)
+    .execute();
+}
+
 export const artistRepository = {
-  async findStale(version: number, limit: number): Promise<Artist[]> {
-    return db
-      .selectFrom("artist")
-      .where("enrichmentVersion", "<", version)
-      .selectAll()
-      .limit(limit)
-      .execute();
+  async findStale(
+    table: "artistSpotifyEnrichment" | "artistLastfmEnrichment",
+    version: number,
+    limit: number
+  ): Promise<Artist[]> {
+    if (table === "artistSpotifyEnrichment") {
+      return findStaleBySpotify(version, limit);
+    }
+    return findStaleByLastfm(version, limit);
   },
 
   async updateGenres(
-    updates: { id: string; spotifyGenres: string[] }[]
+    updates: { id: string; genres: string[] }[]
   ): Promise<void> {
     if (updates.length === 0) return;
     const now = new Date();
-    for (const { id, spotifyGenres } of updates) {
+    for (const { id, genres } of updates) {
       await db
-        .updateTable("artist")
-        .set({ spotifyGenres, updatedAt: now })
-        .where("id", "=", id)
+        .insertInto("artistSpotifyEnrichment")
+        .values({ artistId: id, genres, enrichedAt: now })
+        .onConflict((oc) =>
+          oc.column("artistId").doUpdateSet({
+            genres: (eb) => eb.ref("excluded.genres"),
+            enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+          })
+        )
         .execute();
     }
   },
 
   async updateLastfmTags(
-    updates: { id: string; lastfmTags: string[] }[]
+    updates: { id: string; tags: string[] }[]
   ): Promise<void> {
     if (updates.length === 0) return;
     await db.transaction().execute(async (trx) => {
       const now = new Date();
-      for (const { id, lastfmTags } of updates) {
+      for (const { id, tags } of updates) {
         await trx
-          .updateTable("artist")
-          .set({ lastfmTags, updatedAt: now })
-          .where("id", "=", id)
+          .insertInto("artistLastfmEnrichment")
+          .values({ artistId: id, tags, enrichedAt: now })
+          .onConflict((oc) =>
+            oc.column("artistId").doUpdateSet({
+              tags: (eb) => eb.ref("excluded.tags"),
+              enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+            })
+          )
           .execute();
       }
     });
   },
 
   async setEnrichmentVersion(
+    table: "artistSpotifyEnrichment" | "artistLastfmEnrichment",
     version: number,
     limit: number
   ): Promise<number> {
     const result = await db
-      .updateTable("artist")
-      .set({ enrichmentVersion: version, enrichedAt: new Date() })
+      .updateTable(table)
+      .set({ version, enrichedAt: new Date() })
       .where(
-        "id",
+        "artistId",
         "in",
         db
-          .selectFrom("artist")
-          .select("id")
-          .where("enrichmentVersion", "<", version)
+          .selectFrom(table)
+          .select("artistId")
+          .where("version", "<", version)
           .limit(limit)
       )
       .execute();

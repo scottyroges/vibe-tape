@@ -314,7 +314,7 @@ export const enrichLastfm = inngest.createFunction(
 
 ## Phases and PR Splits
 
-- [ ] PR 1: Schema migration + enrichment constants — `feat/per-source-versions-schema`
+- [x] PR 1: Schema migration + enrichment constants — `feat/per-source-versions-schema`
 - [ ] PR 2: Update sync pipeline to per-source versioning — `feat/per-source-sync-pipeline`
 - [ ] PR 3: Extract Last.fm into async function — `feat/async-lastfm-enrichment`
 - [ ] PR 4: Vibe profile derivation — `feat/vibe-profile`

@@ -61,7 +61,9 @@ vi.mock("@/lib/lastfm", () => ({
 }));
 
 vi.mock("@/lib/enrichment", () => ({
-  CURRENT_ENRICHMENT_VERSION: 3,
+  SPOTIFY_ENRICHMENT_VERSION: 1,
+  CLAUDE_ENRICHMENT_VERSION: 1,
+  LASTFM_ENRICHMENT_VERSION: 1,
   deriveEra: (date: string | null) => {
     if (!date) return null;
     const year = parseInt(date.slice(0, 4), 10);
@@ -195,11 +197,14 @@ describe("syncLibrary", () => {
       "upsert-data-0",
       "enrich-artists/spotify-genres-0",
       "enrich-artists/lastfm-tags-0",
-      "enrich-artists/set-version-0",
+      "enrich-artists/set-spotify-version-0",
+      "enrich-artists/set-lastfm-version-0",
       "enrich-tracks/era-0",
       "enrich-tracks/claude-classify-0",
       "enrich-tracks/lastfm-tags-0",
-      "enrich-tracks/set-version-0",
+      "enrich-tracks/set-spotify-version-0",
+      "enrich-tracks/set-claude-version-0",
+      "enrich-tracks/set-lastfm-version-0",
       "update-status",
     ]);
   });
@@ -228,8 +233,8 @@ describe("syncLibrary", () => {
 
   it("enriches artists with Spotify genres", async () => {
     mockArtistFindStale.mockResolvedValueOnce([
-      { id: "a1", spotifyId: "sa1", name: "Artist 1", enrichmentVersion: 0 },
-      { id: "a2", spotifyId: "sa2", name: "Artist 2", enrichmentVersion: 0 },
+      { id: "a1", spotifyId: "sa1", name: "Artist 1" },
+      { id: "a2", spotifyId: "sa2", name: "Artist 2" },
     ]);
 
     mockFetchArtists.mockResolvedValueOnce(
@@ -244,8 +249,8 @@ describe("syncLibrary", () => {
 
     expect(mockFetchArtists).toHaveBeenCalledWith("tok-123", ["sa1", "sa2"]);
     expect(mockArtistUpdateGenres).toHaveBeenCalledWith([
-      { id: "a1", spotifyGenres: ["pop", "rock"] },
-      { id: "a2", spotifyGenres: ["jazz"] },
+      { id: "a1", genres: ["pop", "rock"] },
+      { id: "a2", genres: ["jazz"] },
     ]);
   });
 
@@ -255,7 +260,6 @@ describe("syncLibrary", () => {
       id: `a${i}`,
       spotifyId: `sa${i}`,
       name: `Artist ${i}`,
-      enrichmentVersion: 0,
     }));
     mockArtistFindStale
       .mockResolvedValueOnce(staleArtists)
@@ -273,10 +277,10 @@ describe("syncLibrary", () => {
     expect(stepNames).toContain("enrich-artists/spotify-genres-500");
   });
 
-  it("derives era from spotifyReleaseDate", async () => {
+  it("derives era from releaseDate", async () => {
     mockTrackFindStale.mockResolvedValueOnce([
-      { id: "t1", spotifyReleaseDate: "2023-06-15", enrichmentVersion: 0 },
-      { id: "t2", spotifyReleaseDate: "1995-01-01", enrichmentVersion: 0 },
+      { id: "t1", releaseDate: "2023-06-15" },
+      { id: "t2", releaseDate: "1995-01-01" },
     ]);
 
     const step = createMockStep();
@@ -290,8 +294,8 @@ describe("syncLibrary", () => {
 
   it("skips tracks with null release date in era derivation", async () => {
     mockTrackFindStale.mockResolvedValueOnce([
-      { id: "t1", spotifyReleaseDate: "2023-06-15", enrichmentVersion: 0 },
-      { id: "t2", spotifyReleaseDate: null, enrichmentVersion: 0 },
+      { id: "t1", releaseDate: "2023-06-15" },
+      { id: "t2", releaseDate: null },
     ]);
 
     const step = createMockStep();
@@ -336,8 +340,8 @@ describe("syncLibrary", () => {
 
   it("classifies tracks with mocked Claude response", async () => {
     mockTrackFindStaleWithArtists.mockResolvedValueOnce([
-      { id: "t1", name: "Song A", artist: "Artist A", enrichmentVersion: 0 },
-      { id: "t2", name: "Song B", artist: "Artist B", enrichmentVersion: 0 },
+      { id: "t1", name: "Song A", artist: "Artist A" },
+      { id: "t2", name: "Song B", artist: "Artist B" },
     ]);
 
     mockClassifyTracks.mockResolvedValueOnce({
@@ -357,15 +361,15 @@ describe("syncLibrary", () => {
       { name: "Song B", artist: "Artist B" },
     ]);
     expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
-      { id: "t1", claudeMood: "uplifting", claudeEnergy: "high", claudeDanceability: "medium", claudeVibeTags: ["summer", "driving"] },
-      { id: "t2", claudeMood: "melancholic", claudeEnergy: "low", claudeDanceability: "low", claudeVibeTags: ["late-night", "rainy-day"] },
+      { id: "t1", mood: "uplifting", energy: "high", danceability: "medium", vibeTags: ["summer", "driving"] },
+      { id: "t2", mood: "melancholic", energy: "low", danceability: "low", vibeTags: ["late-night", "rainy-day"] },
     ]);
   });
 
   it("skips tracks with invalid Claude response", async () => {
     mockTrackFindStaleWithArtists.mockResolvedValueOnce([
-      { id: "t1", name: "Song A", artist: "Artist A", enrichmentVersion: 0 },
-      { id: "t2", name: "Song B", artist: "Artist B", enrichmentVersion: 0 },
+      { id: "t1", name: "Song A", artist: "Artist A" },
+      { id: "t2", name: "Song B", artist: "Artist B" },
     ]);
 
     mockClassifyTracks.mockResolvedValueOnce({
@@ -381,7 +385,7 @@ describe("syncLibrary", () => {
     await handler({ event: { data: { userId: "user-1" } }, step });
 
     expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
-      { id: "t1", claudeMood: "uplifting", claudeEnergy: "high", claudeDanceability: "medium", claudeVibeTags: ["summer"] },
+      { id: "t1", mood: "uplifting", energy: "high", danceability: "medium", vibeTags: ["summer"] },
     ]);
   });
 
@@ -390,7 +394,6 @@ describe("syncLibrary", () => {
       id: `t${i}`,
       name: `Song ${i}`,
       artist: `Artist ${i}`,
-      enrichmentVersion: 0,
     }));
     mockTrackFindStaleWithArtists
       .mockResolvedValueOnce(staleTracks)
@@ -416,8 +419,8 @@ describe("syncLibrary", () => {
     mockArtistFindStale
       .mockResolvedValueOnce([]) // spotify-genres call
       .mockResolvedValueOnce([   // lastfm-tags call
-        { id: "a1", spotifyId: "sa1", name: "Radiohead", enrichmentVersion: 0 },
-        { id: "a2", spotifyId: "sa2", name: "Aphex Twin", enrichmentVersion: 0 },
+        { id: "a1", spotifyId: "sa1", name: "Radiohead" },
+        { id: "a2", spotifyId: "sa2", name: "Aphex Twin" },
       ]);
 
     mockGetArtistTopTags
@@ -430,15 +433,15 @@ describe("syncLibrary", () => {
     expect(mockGetArtistTopTags).toHaveBeenCalledWith("Radiohead");
     expect(mockGetArtistTopTags).toHaveBeenCalledWith("Aphex Twin");
     expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "a1", lastfmTags: ["rock", "alternative", "indie"] },
-      { id: "a2", lastfmTags: ["electronic", "ambient"] },
+      { id: "a1", tags: ["rock", "alternative", "indie"] },
+      { id: "a2", tags: ["electronic", "ambient"] },
     ]);
   });
 
   it("enriches tracks with Last.fm tags", async () => {
     mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
-      { id: "t1", name: "Creep", artist: "Radiohead", enrichmentVersion: 0 },
-      { id: "t2", name: "Windowlicker", artist: "Aphex Twin", enrichmentVersion: 0 },
+      { id: "t1", name: "Creep", artist: "Radiohead" },
+      { id: "t2", name: "Windowlicker", artist: "Aphex Twin" },
     ]);
 
     mockGetTrackTopTags
@@ -451,8 +454,8 @@ describe("syncLibrary", () => {
     expect(mockGetTrackTopTags).toHaveBeenCalledWith("Radiohead", "Creep");
     expect(mockGetTrackTopTags).toHaveBeenCalledWith("Aphex Twin", "Windowlicker");
     expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "t1", lastfmTags: ["alternative", "rock"] },
-      { id: "t2", lastfmTags: ["electronic"] },
+      { id: "t1", tags: ["alternative", "rock"] },
+      { id: "t2", tags: ["electronic"] },
     ]);
   });
 
@@ -460,8 +463,8 @@ describe("syncLibrary", () => {
     mockArtistFindStale
       .mockResolvedValueOnce([]) // spotify-genres
       .mockResolvedValueOnce([   // lastfm-tags
-        { id: "a1", spotifyId: "sa1", name: "Known Artist", enrichmentVersion: 0 },
-        { id: "a2", spotifyId: "sa2", name: "Unknown Artist", enrichmentVersion: 0 },
+        { id: "a1", spotifyId: "sa1", name: "Known Artist" },
+        { id: "a2", spotifyId: "sa2", name: "Unknown Artist" },
       ]);
 
     mockGetArtistTopTags
@@ -472,14 +475,14 @@ describe("syncLibrary", () => {
     await handler({ event: { data: { userId: "user-1" } }, step });
 
     expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "a1", lastfmTags: ["rock"] },
+      { id: "a1", tags: ["rock"] },
     ]);
   });
 
   it("skips tracks where Last.fm returns empty tags", async () => {
     mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
-      { id: "t1", name: "Known Track", artist: "Artist", enrichmentVersion: 0 },
-      { id: "t2", name: "Unknown Track", artist: "Artist", enrichmentVersion: 0 },
+      { id: "t1", name: "Known Track", artist: "Artist" },
+      { id: "t2", name: "Unknown Track", artist: "Artist" },
     ]);
 
     mockGetTrackTopTags
@@ -490,7 +493,7 @@ describe("syncLibrary", () => {
     await handler({ event: { data: { userId: "user-1" } }, step });
 
     expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "t1", lastfmTags: ["rock"] },
+      { id: "t1", tags: ["rock"] },
     ]);
   });
 
@@ -498,8 +501,8 @@ describe("syncLibrary", () => {
     mockArtistFindStale
       .mockResolvedValueOnce([]) // spotify-genres
       .mockResolvedValueOnce([   // lastfm-tags
-        { id: "a1", spotifyId: "sa1", name: "Failing Artist", enrichmentVersion: 0 },
-        { id: "a2", spotifyId: "sa2", name: "Good Artist", enrichmentVersion: 0 },
+        { id: "a1", spotifyId: "sa1", name: "Failing Artist" },
+        { id: "a2", spotifyId: "sa2", name: "Good Artist" },
       ]);
 
     mockGetArtistTopTags
@@ -510,14 +513,14 @@ describe("syncLibrary", () => {
     await handler({ event: { data: { userId: "user-1" } }, step });
 
     expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "a2", lastfmTags: ["rock"] },
+      { id: "a2", tags: ["rock"] },
     ]);
   });
 
   it("continues processing remaining tracks when one Last.fm call fails", async () => {
     mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
-      { id: "t1", name: "Failing Track", artist: "Artist", enrichmentVersion: 0 },
-      { id: "t2", name: "Good Track", artist: "Artist", enrichmentVersion: 0 },
+      { id: "t1", name: "Failing Track", artist: "Artist" },
+      { id: "t2", name: "Good Track", artist: "Artist" },
     ]);
 
     mockGetTrackTopTags
@@ -528,7 +531,7 @@ describe("syncLibrary", () => {
     await handler({ event: { data: { userId: "user-1" } }, step });
 
     expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
-      { id: "t2", lastfmTags: ["electronic"] },
+      { id: "t2", tags: ["electronic"] },
     ]);
   });
 
@@ -537,7 +540,6 @@ describe("syncLibrary", () => {
       id: `a${i}`,
       spotifyId: `sa${i}`,
       name: `Artist ${i}`,
-      enrichmentVersion: 0,
     }));
     mockArtistFindStale
       .mockResolvedValueOnce([])           // spotify-genres
@@ -559,7 +561,6 @@ describe("syncLibrary", () => {
       id: `t${i}`,
       name: `Song ${i}`,
       artist: `Artist ${i}`,
-      enrichmentVersion: 0,
     }));
     mockTrackFindStaleWithPrimaryArtist
       .mockResolvedValueOnce(staleTracks)

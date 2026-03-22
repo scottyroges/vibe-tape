@@ -1,4 +1,7 @@
-export const CURRENT_ENRICHMENT_VERSION = 3;
+export const SPOTIFY_ENRICHMENT_VERSION = 1;
+export const CLAUDE_ENRICHMENT_VERSION = 1;
+export const LASTFM_ENRICHMENT_VERSION = 1;
+export const VIBE_DERIVATION_VERSION = 1;
 
 /**
  * Derives a decade string from a Spotify release date.

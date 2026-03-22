@@ -6,8 +6,13 @@
 User
 ├── LikedSong (user↔track join table)
 │   └── Track (one row per unique Spotify track)
-│       └── TrackArtist (track↔artist join, ordered by position)
-│           └── Artist (one row per unique Spotify artist)
+│       ├── TrackArtist (track↔artist join, ordered by position)
+│       │   └── Artist (one row per unique Spotify artist)
+│       │       ├── ArtistSpotifyEnrichment (1:1, genres from Spotify)
+│       │       └── ArtistLastfmEnrichment (1:1, tags from Last.fm)
+│       ├── TrackSpotifyEnrichment (1:1, popularity/duration/era)
+│       ├── TrackClaudeEnrichment (1:1, mood/energy/danceability/vibe tags)
+│       └── TrackLastfmEnrichment (1:1, tags from Last.fm)
 └── Playlist (generated vibe playlists)
     └── seedSongIds[] (references to Tracks that seeded this playlist)
 

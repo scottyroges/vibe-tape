@@ -25,12 +25,20 @@ export type Artist = {
     id: string;
     spotifyId: string;
     name: string;
-    spotifyGenres: Generated<string[]>;
-    lastfmTags: Generated<string[]>;
-    enrichmentVersion: Generated<number>;
-    enrichedAt: Timestamp | null;
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
+};
+export type ArtistLastfmEnrichment = {
+    artistId: string;
+    tags: Generated<string[]>;
+    version: Generated<number>;
+    enrichedAt: Timestamp | null;
+};
+export type ArtistSpotifyEnrichment = {
+    artistId: string;
+    genres: Generated<string[]>;
+    version: Generated<number>;
+    enrichedAt: Timestamp | null;
 };
 export type LikedSong = {
     id: string;
@@ -67,17 +75,13 @@ export type Track = {
     name: string;
     album: string;
     albumArtUrl: string | null;
-    spotifyPopularity: number | null;
-    spotifyDurationMs: number | null;
-    spotifyReleaseDate: string | null;
-    derivedEra: string | null;
-    claudeMood: string | null;
-    claudeEnergy: string | null;
-    claudeDanceability: string | null;
-    claudeVibeTags: Generated<string[]>;
-    lastfmTags: Generated<string[]>;
-    enrichmentVersion: Generated<number>;
-    enrichedAt: Timestamp | null;
+    vibeMood: string | null;
+    vibeEnergy: string | null;
+    vibeDanceability: string | null;
+    vibeGenres: Generated<string[]>;
+    vibeTags: Generated<string[]>;
+    vibeVersion: Generated<number>;
+    vibeUpdatedAt: Timestamp | null;
     createdAt: Generated<Timestamp>;
     updatedAt: Timestamp;
 };
@@ -85,6 +89,30 @@ export type TrackArtist = {
     trackId: string;
     artistId: string;
     position: number;
+};
+export type TrackClaudeEnrichment = {
+    trackId: string;
+    mood: string | null;
+    energy: string | null;
+    danceability: string | null;
+    vibeTags: Generated<string[]>;
+    version: Generated<number>;
+    enrichedAt: Timestamp | null;
+};
+export type TrackLastfmEnrichment = {
+    trackId: string;
+    tags: Generated<string[]>;
+    version: Generated<number>;
+    enrichedAt: Timestamp | null;
+};
+export type TrackSpotifyEnrichment = {
+    trackId: string;
+    popularity: number | null;
+    durationMs: number | null;
+    releaseDate: string | null;
+    derivedEra: string | null;
+    version: Generated<number>;
+    enrichedAt: Timestamp | null;
 };
 export type User = {
     id: string;
@@ -111,11 +139,16 @@ export type Verification = {
 export type DB = {
     account: Account;
     artist: Artist;
+    artistLastfmEnrichment: ArtistLastfmEnrichment;
+    artistSpotifyEnrichment: ArtistSpotifyEnrichment;
     likedSong: LikedSong;
     playlist: Playlist;
     session: Session;
     track: Track;
     trackArtist: TrackArtist;
+    trackClaudeEnrichment: TrackClaudeEnrichment;
+    trackLastfmEnrichment: TrackLastfmEnrichment;
+    trackSpotifyEnrichment: TrackSpotifyEnrichment;
     user: User;
     verification: Verification;
 };
