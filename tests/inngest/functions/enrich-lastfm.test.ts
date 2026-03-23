@@ -109,9 +109,7 @@ describe("enrichLastfm", () => {
     );
     expect(stepNames).toEqual([
       "enrich-artists/lastfm-tags-0",
-      "enrich-artists/set-lastfm-version-0",
       "enrich-tracks/lastfm-tags-0",
-      "enrich-tracks/set-lastfm-version-0",
     ]);
   });
 
@@ -157,7 +155,7 @@ describe("enrichLastfm", () => {
     ]);
   });
 
-  it("skips artists where Last.fm returns empty tags", async () => {
+  it("stores empty tags for artists where Last.fm returns none", async () => {
     mockArtistFindStale.mockResolvedValueOnce([
       { id: "a1", spotifyId: "sa1", name: "Known Artist" },
       { id: "a2", spotifyId: "sa2", name: "Unknown Artist" },
@@ -172,10 +170,11 @@ describe("enrichLastfm", () => {
 
     expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
       { id: "a1", tags: ["rock"] },
+      { id: "a2", tags: [] },
     ]);
   });
 
-  it("skips tracks where Last.fm returns empty tags", async () => {
+  it("stores empty tags for tracks where Last.fm returns none", async () => {
     mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
       { id: "t1", name: "Known Track", artist: "Artist" },
       { id: "t2", name: "Unknown Track", artist: "Artist" },
@@ -190,10 +189,11 @@ describe("enrichLastfm", () => {
 
     expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
       { id: "t1", tags: ["rock"] },
+      { id: "t2", tags: [] },
     ]);
   });
 
-  it("continues processing when one artist Last.fm call fails", async () => {
+  it("stores empty tags when artist Last.fm call fails", async () => {
     mockArtistFindStale.mockResolvedValueOnce([
       { id: "a1", spotifyId: "sa1", name: "Failing Artist" },
       { id: "a2", spotifyId: "sa2", name: "Good Artist" },
@@ -207,11 +207,12 @@ describe("enrichLastfm", () => {
     await handler({ step });
 
     expect(mockArtistUpdateLastfmTags).toHaveBeenCalledWith([
+      { id: "a1", tags: [] },
       { id: "a2", tags: ["rock"] },
     ]);
   });
 
-  it("continues processing when one track Last.fm call fails", async () => {
+  it("stores empty tags when track Last.fm call fails", async () => {
     mockTrackFindStaleWithPrimaryArtist.mockResolvedValueOnce([
       { id: "t1", name: "Failing Track", artist: "Artist" },
       { id: "t2", name: "Good Track", artist: "Artist" },
@@ -225,12 +226,13 @@ describe("enrichLastfm", () => {
     await handler({ step });
 
     expect(mockTrackUpdateLastfmTags).toHaveBeenCalledWith([
+      { id: "t1", tags: [] },
       { id: "t2", tags: ["electronic"] },
     ]);
   });
 
-  it("chunks artist enrichment at 200 boundary", async () => {
-    const staleArtists = Array.from({ length: 200 }, (_, i) => ({
+  it("chunks artist enrichment at 100 boundary", async () => {
+    const staleArtists = Array.from({ length: 100 }, (_, i) => ({
       id: `a${i}`,
       spotifyId: `sa${i}`,
       name: `Artist ${i}`,
@@ -246,11 +248,11 @@ describe("enrichLastfm", () => {
       (call: unknown[]) => call[0]
     );
     expect(stepNames).toContain("enrich-artists/lastfm-tags-0");
-    expect(stepNames).toContain("enrich-artists/lastfm-tags-200");
+    expect(stepNames).toContain("enrich-artists/lastfm-tags-100");
   });
 
-  it("chunks track enrichment at 200 boundary", async () => {
-    const staleTracks = Array.from({ length: 200 }, (_, i) => ({
+  it("chunks track enrichment at 100 boundary", async () => {
+    const staleTracks = Array.from({ length: 100 }, (_, i) => ({
       id: `t${i}`,
       name: `Song ${i}`,
       artist: `Artist ${i}`,
@@ -266,7 +268,7 @@ describe("enrichLastfm", () => {
       (call: unknown[]) => call[0]
     );
     expect(stepNames).toContain("enrich-tracks/lastfm-tags-0");
-    expect(stepNames).toContain("enrich-tracks/lastfm-tags-200");
+    expect(stepNames).toContain("enrich-tracks/lastfm-tags-100");
   });
 
   it("returns counts of processed entities", async () => {

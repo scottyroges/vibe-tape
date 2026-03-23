@@ -53,9 +53,9 @@ function extractTags(data: unknown): string[] {
     .map((t) => t.name.toLowerCase());
 }
 
-async function lastfmFetch(params: Record<string, string>): Promise<unknown> {
-  await throttle();
+const MAX_RETRIES = 2;
 
+async function lastfmFetch(params: Record<string, string>): Promise<unknown> {
   const url = new URL(LASTFM_BASE_URL);
   url.searchParams.set("api_key", getApiKey());
   url.searchParams.set("format", "json");
@@ -63,14 +63,22 @@ async function lastfmFetch(params: Record<string, string>): Promise<unknown> {
     url.searchParams.set(key, value);
   }
 
-  const response = await fetch(url.toString());
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    await throttle();
 
-  if (response.status === 404) return null;
-  if (!response.ok) {
-    throw new Error(`Last.fm API error: ${response.status} ${response.statusText}`);
+    const response = await fetch(url.toString());
+
+    if (response.status === 404) return null;
+    if (response.status >= 500 && attempt < MAX_RETRIES) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(`Last.fm API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
   }
-
-  return response.json();
 }
 
 export async function getArtistTopTags(artist: string): Promise<string[]> {

@@ -28,10 +28,13 @@ export async function classifyTracks(
     messages: [{ role: "user", content: user }],
   });
 
-  const text = response.content
+  let text = response.content
     .filter((block) => block.type === "text")
     .map((block) => block.text)
     .join("");
+
+  // Strip markdown code fences if present
+  text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
 
   let parsed: unknown;
   try {
