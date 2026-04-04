@@ -3,6 +3,11 @@ import { sql } from "kysely";
 import { createId } from "@/lib/id";
 import type { Track, TrackWithLikedAt } from "@/domain/types";
 import type { SpotifyLikedSong } from "@/lib/spotify";
+import {
+  SPOTIFY_ENRICHMENT_VERSION,
+  CLAUDE_ENRICHMENT_VERSION,
+  LASTFM_ENRICHMENT_VERSION,
+} from "@/lib/enrichment";
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -129,18 +134,24 @@ export const trackRepository = {
   },
 
   async updateDerivedEra(
-    updates: { id: string; derivedEra: string }[]
+    updates: { id: string; derivedEra: string | null }[]
   ): Promise<void> {
     if (updates.length === 0) return;
     const now = new Date();
     for (const { id, derivedEra } of updates) {
       await db
         .insertInto("trackSpotifyEnrichment")
-        .values({ trackId: id, derivedEra, enrichedAt: now })
+        .values({
+          trackId: id,
+          derivedEra,
+          enrichedAt: now,
+          version: SPOTIFY_ENRICHMENT_VERSION,
+        })
         .onConflict((oc) =>
           oc.column("trackId").doUpdateSet({
             derivedEra: (eb) => eb.ref("excluded.derivedEra"),
             enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+            version: (eb) => eb.ref("excluded.version"),
           })
         )
         .execute();
@@ -156,11 +167,17 @@ export const trackRepository = {
       for (const { id, tags } of updates) {
         await trx
           .insertInto("trackLastfmEnrichment")
-          .values({ trackId: id, tags, enrichedAt: now })
+          .values({
+            trackId: id,
+            tags,
+            enrichedAt: now,
+            version: LASTFM_ENRICHMENT_VERSION,
+          })
           .onConflict((oc) =>
             oc.column("trackId").doUpdateSet({
               tags: (eb) => eb.ref("excluded.tags"),
               enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+              version: (eb) => eb.ref("excluded.version"),
             })
           )
           .execute();
@@ -171,9 +188,9 @@ export const trackRepository = {
   async updateClaudeClassification(
     updates: {
       id: string;
-      mood: string;
-      energy: string;
-      danceability: string;
+      mood: string | null;
+      energy: string | null;
+      danceability: string | null;
       vibeTags: string[];
     }[]
   ): Promise<void> {
@@ -183,7 +200,15 @@ export const trackRepository = {
       for (const { id, mood, energy, danceability, vibeTags } of updates) {
         await trx
           .insertInto("trackClaudeEnrichment")
-          .values({ trackId: id, mood, energy, danceability, vibeTags, enrichedAt: now })
+          .values({
+            trackId: id,
+            mood,
+            energy,
+            danceability,
+            vibeTags,
+            enrichedAt: now,
+            version: CLAUDE_ENRICHMENT_VERSION,
+          })
           .onConflict((oc) =>
             oc.column("trackId").doUpdateSet({
               mood: (eb) => eb.ref("excluded.mood"),
@@ -191,6 +216,7 @@ export const trackRepository = {
               danceability: (eb) => eb.ref("excluded.danceability"),
               vibeTags: (eb) => eb.ref("excluded.vibeTags"),
               enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+              version: (eb) => eb.ref("excluded.version"),
             })
           )
           .execute();

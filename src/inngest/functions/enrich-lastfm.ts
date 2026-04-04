@@ -4,8 +4,7 @@ import { getArtistTopTags, getTrackTopTags } from "@/lib/lastfm";
 import { artistRepository } from "@/repositories/artist.repository";
 import { trackRepository } from "@/repositories/track.repository";
 
-const LASTFM_CHUNK_SIZE = 200;
-const SET_VERSION_CHUNK_SIZE = 1000;
+const LASTFM_CHUNK_SIZE = 100;
 
 export const enrichLastfm = inngest.createFunction(
   {
@@ -40,14 +39,13 @@ export const enrichLastfm = inngest.createFunction(
           for (const artist of stale) {
             try {
               const tags = await getArtistTopTags(artist.name);
-              if (tags.length > 0) {
-                updates.push({ id: artist.id, tags });
-              }
+              updates.push({ id: artist.id, tags });
             } catch (err) {
               console.warn(
                 `Last.fm artist tag fetch failed for "${artist.name}":`,
                 err instanceof Error ? err.message : err
               );
+              updates.push({ id: artist.id, tags: [] });
             }
           }
 
@@ -58,22 +56,6 @@ export const enrichLastfm = inngest.createFunction(
       artistsProcessed += processed;
       if (processed < LASTFM_CHUNK_SIZE) break;
       artistOffset += LASTFM_CHUNK_SIZE;
-    }
-
-    let artistVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-artists/set-lastfm-version-${artistVersionOffset}`,
-        async () => {
-          return artistRepository.setEnrichmentVersion(
-            "artistLastfmEnrichment",
-            LASTFM_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      artistVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
     // ── Track Last.fm tags ──
@@ -94,14 +76,13 @@ export const enrichLastfm = inngest.createFunction(
           for (const track of stale) {
             try {
               const tags = await getTrackTopTags(track.artist, track.name);
-              if (tags.length > 0) {
-                updates.push({ id: track.id, tags });
-              }
+              updates.push({ id: track.id, tags });
             } catch (err) {
               console.warn(
                 `Last.fm track tag fetch failed for "${track.artist} - ${track.name}":`,
                 err instanceof Error ? err.message : err
               );
+              updates.push({ id: track.id, tags: [] });
             }
           }
 
@@ -112,22 +93,6 @@ export const enrichLastfm = inngest.createFunction(
       tracksProcessed += processed;
       if (processed < LASTFM_CHUNK_SIZE) break;
       trackOffset += LASTFM_CHUNK_SIZE;
-    }
-
-    let trackVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-tracks/set-lastfm-version-${trackVersionOffset}`,
-        async () => {
-          return trackRepository.setEnrichmentVersion(
-            "trackLastfmEnrichment",
-            LASTFM_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      trackVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
     return { artistsProcessed, tracksProcessed };

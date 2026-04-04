@@ -1,5 +1,9 @@
 import { db } from "@/lib/db";
 import type { Artist } from "@/domain/types";
+import {
+  SPOTIFY_ENRICHMENT_VERSION,
+  LASTFM_ENRICHMENT_VERSION,
+} from "@/lib/enrichment";
 
 async function findStaleBySpotify(version: number, limit: number): Promise<Artist[]> {
   return db
@@ -59,11 +63,17 @@ export const artistRepository = {
     for (const { id, genres } of updates) {
       await db
         .insertInto("artistSpotifyEnrichment")
-        .values({ artistId: id, genres, enrichedAt: now })
+        .values({
+          artistId: id,
+          genres,
+          enrichedAt: now,
+          version: SPOTIFY_ENRICHMENT_VERSION,
+        })
         .onConflict((oc) =>
           oc.column("artistId").doUpdateSet({
             genres: (eb) => eb.ref("excluded.genres"),
             enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+            version: (eb) => eb.ref("excluded.version"),
           })
         )
         .execute();
@@ -79,11 +89,17 @@ export const artistRepository = {
       for (const { id, tags } of updates) {
         await trx
           .insertInto("artistLastfmEnrichment")
-          .values({ artistId: id, tags, enrichedAt: now })
+          .values({
+            artistId: id,
+            tags,
+            enrichedAt: now,
+            version: LASTFM_ENRICHMENT_VERSION,
+          })
           .onConflict((oc) =>
             oc.column("artistId").doUpdateSet({
               tags: (eb) => eb.ref("excluded.tags"),
               enrichedAt: (eb) => eb.ref("excluded.enrichedAt"),
+              version: (eb) => eb.ref("excluded.version"),
             })
           )
           .execute();

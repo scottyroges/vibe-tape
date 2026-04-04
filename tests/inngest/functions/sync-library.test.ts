@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockGetValidToken,
   mockFetchLikedSongs,
-  mockFetchArtists,
   mockUpsertMany,
   mockTrackFindStale,
   mockTrackFindStaleWithArtists,
@@ -20,7 +19,6 @@ const {
 } = vi.hoisted(() => ({
   mockGetValidToken: vi.fn(),
   mockFetchLikedSongs: vi.fn(),
-  mockFetchArtists: vi.fn(),
   mockUpsertMany: vi.fn(),
   mockTrackFindStale: vi.fn(),
   mockTrackFindStaleWithArtists: vi.fn(),
@@ -42,12 +40,12 @@ vi.mock("@/lib/spotify-token", () => ({
 
 vi.mock("@/lib/spotify", () => ({
   fetchLikedSongs: mockFetchLikedSongs,
-  fetchArtists: mockFetchArtists,
 }));
 
 vi.mock("@/lib/enrichment", () => ({
   SPOTIFY_ENRICHMENT_VERSION: 1,
   CLAUDE_ENRICHMENT_VERSION: 1,
+  SPOTIFY_EXTENDED_QUOTA: false,
   deriveEra: (date: string | null) => {
     if (!date) return null;
     const year = parseInt(date.slice(0, 4), 10);
@@ -141,7 +139,6 @@ function setupDefaultMocks() {
   mockTrackUpdateDerivedEra.mockResolvedValue(undefined);
   mockTrackUpdateClaudeClassification.mockResolvedValue(undefined);
   mockTrackSetEnrichmentVersion.mockResolvedValue(0);
-  mockFetchArtists.mockResolvedValue(new Map());
   mockBuildClassifyPrompt.mockReturnValue({ system: "sys", user: "usr" });
   mockClassifyTracks.mockResolvedValue({ results: [], inputTokens: 0, outputTokens: 0 });
 }
@@ -172,12 +169,8 @@ describe("syncLibrary", () => {
       "get-token",
       "fetch-songs-0",
       "upsert-data-0",
-      "enrich-artists/spotify-genres-0",
-      "enrich-artists/set-spotify-version-0",
       "enrich-tracks/era-0",
       "enrich-tracks/claude-classify-0",
-      "enrich-tracks/set-spotify-version-0",
-      "enrich-tracks/set-claude-version-0",
       "update-status",
     ]);
 
@@ -209,52 +202,6 @@ describe("syncLibrary", () => {
     expect(mockUpsertMany).toHaveBeenCalledTimes(2);
   });
 
-  it("enriches artists with Spotify genres", async () => {
-    mockArtistFindStale.mockResolvedValueOnce([
-      { id: "a1", spotifyId: "sa1", name: "Artist 1" },
-      { id: "a2", spotifyId: "sa2", name: "Artist 2" },
-    ]);
-
-    mockFetchArtists.mockResolvedValueOnce(
-      new Map([
-        ["sa1", ["pop", "rock"]],
-        ["sa2", ["jazz"]],
-      ])
-    );
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    expect(mockFetchArtists).toHaveBeenCalledWith("tok-123", ["sa1", "sa2"]);
-    expect(mockArtistUpdateGenres).toHaveBeenCalledWith([
-      { id: "a1", genres: ["pop", "rock"] },
-      { id: "a2", genres: ["jazz"] },
-    ]);
-  });
-
-  it("chunks artist genre enrichment", async () => {
-    // First call: 500 artists (full chunk), second call: 0 (done)
-    const staleArtists = Array.from({ length: 500 }, (_, i) => ({
-      id: `a${i}`,
-      spotifyId: `sa${i}`,
-      name: `Artist ${i}`,
-    }));
-    mockArtistFindStale
-      .mockResolvedValueOnce(staleArtists)
-      .mockResolvedValueOnce([]);
-
-    mockFetchArtists.mockResolvedValue(new Map());
-
-    const step = createMockStep();
-    await handler({ event: { data: { userId: "user-1" } }, step });
-
-    const stepNames = step.run.mock.calls.map(
-      (call: unknown[]) => call[0]
-    );
-    expect(stepNames).toContain("enrich-artists/spotify-genres-0");
-    expect(stepNames).toContain("enrich-artists/spotify-genres-500");
-  });
-
   it("derives era from releaseDate", async () => {
     mockTrackFindStale.mockResolvedValueOnce([
       { id: "t1", releaseDate: "2023-06-15" },
@@ -270,7 +217,7 @@ describe("syncLibrary", () => {
     ]);
   });
 
-  it("skips tracks with null release date in era derivation", async () => {
+  it("passes null derivedEra for tracks with null release date", async () => {
     mockTrackFindStale.mockResolvedValueOnce([
       { id: "t1", releaseDate: "2023-06-15" },
       { id: "t2", releaseDate: null },
@@ -281,6 +228,7 @@ describe("syncLibrary", () => {
 
     expect(mockTrackUpdateDerivedEra).toHaveBeenCalledWith([
       { id: "t1", derivedEra: "2020s" },
+      { id: "t2", derivedEra: null },
     ]);
   });
 
@@ -344,7 +292,7 @@ describe("syncLibrary", () => {
     ]);
   });
 
-  it("skips tracks with invalid Claude response", async () => {
+  it("stores null fields for tracks with invalid Claude response", async () => {
     mockTrackFindStaleWithArtists.mockResolvedValueOnce([
       { id: "t1", name: "Song A", artist: "Artist A" },
       { id: "t2", name: "Song B", artist: "Artist B" },
@@ -364,6 +312,7 @@ describe("syncLibrary", () => {
 
     expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
       { id: "t1", mood: "uplifting", energy: "high", danceability: "medium", vibeTags: ["summer"] },
+      { id: "t2", mood: null, energy: null, danceability: null, vibeTags: [] },
     ]);
   });
 

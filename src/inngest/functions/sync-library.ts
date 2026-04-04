@@ -4,6 +4,7 @@ import { fetchLikedSongs, fetchArtists } from "@/lib/spotify";
 import {
   SPOTIFY_ENRICHMENT_VERSION,
   CLAUDE_ENRICHMENT_VERSION,
+  SPOTIFY_EXTENDED_QUOTA,
   deriveEra,
 } from "@/lib/enrichment";
 import { buildClassifyPrompt } from "@/lib/prompts/classify-tracks";
@@ -17,7 +18,6 @@ const ARTIST_GENRE_CHUNK_SIZE = 500;
 const TRACK_ERA_CHUNK_SIZE = 1000;
 const CLAUDE_CLASSIFY_CHUNK_SIZE = 500;
 const CLAUDE_BATCH_SIZE = 50;
-const SET_VERSION_CHUNK_SIZE = 1000;
 
 const VALID_ENERGY_VALUES = new Set(["low", "medium", "high"]);
 
@@ -113,53 +113,40 @@ export const syncLibrary = inngest.createFunction(
     // ── Artist Enrichment ──
 
     // Step 5a: Spotify genres
-    let artistGenreOffset = 0;
-    while (true) {
-      const processed = await step.run(
-        `enrich-artists/spotify-genres-${artistGenreOffset}`,
-        async () => {
-          const stale = await artistRepository.findStale(
-            "artistSpotifyEnrichment",
-            SPOTIFY_ENRICHMENT_VERSION,
-            ARTIST_GENRE_CHUNK_SIZE
-          );
-          if (stale.length === 0) return 0;
+    // Requires extended quota access — gated by SPOTIFY_EXTENDED_QUOTA flag.
+    // See: .personal/docs/notes/spotify-dev-mode-restrictions.md
+    if (SPOTIFY_EXTENDED_QUOTA) {
+      let artistGenreOffset = 0;
+      while (true) {
+        const processed = await step.run(
+          `enrich-artists/spotify-genres-${artistGenreOffset}`,
+          async () => {
+            const stale = await artistRepository.findStale(
+              "artistSpotifyEnrichment",
+              SPOTIFY_ENRICHMENT_VERSION,
+              ARTIST_GENRE_CHUNK_SIZE
+            );
+            if (stale.length === 0) return 0;
 
-          const genreMap = await fetchArtists(
-            token.accessToken,
-            stale.map((a) => a.spotifyId)
-          );
+            const genreMap = await fetchArtists(
+              token.accessToken,
+              stale.map((a) => a.spotifyId)
+            );
 
-          const updates = stale
-            .filter((a) => genreMap.has(a.spotifyId))
-            .map((a) => ({
-              id: a.id,
-              genres: genreMap.get(a.spotifyId)!,
-            }));
+            const updates = stale
+              .filter((a) => genreMap.has(a.spotifyId))
+              .map((a) => ({
+                id: a.id,
+                genres: genreMap.get(a.spotifyId)!,
+              }));
 
-          await artistRepository.updateGenres(updates);
-          return stale.length;
-        }
-      );
-      if (processed < ARTIST_GENRE_CHUNK_SIZE) break;
-      artistGenreOffset += ARTIST_GENRE_CHUNK_SIZE;
-    }
-
-    // Step 5b: Set artist enrichment versions
-    let artistSpotifyVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-artists/set-spotify-version-${artistSpotifyVersionOffset}`,
-        async () => {
-          return artistRepository.setEnrichmentVersion(
-            "artistSpotifyEnrichment",
-            SPOTIFY_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      artistSpotifyVersionOffset += SET_VERSION_CHUNK_SIZE;
+            await artistRepository.updateGenres(updates);
+            return stale.length;
+          }
+        );
+        if (processed < ARTIST_GENRE_CHUNK_SIZE) break;
+        artistGenreOffset += ARTIST_GENRE_CHUNK_SIZE;
+      }
     }
 
     // ── Track Enrichment ──
@@ -176,15 +163,10 @@ export const syncLibrary = inngest.createFunction(
           );
           if (stale.length === 0) return 0;
 
-          const updates = stale
-            .map((t) => ({
-              id: t.id,
-              derivedEra: deriveEra(t.releaseDate),
-            }))
-            .filter(
-              (u): u is { id: string; derivedEra: string } =>
-                u.derivedEra !== null
-            );
+          const updates = stale.map((t) => ({
+            id: t.id,
+            derivedEra: deriveEra(t.releaseDate),
+          }));
 
           await trackRepository.updateDerivedEra(updates);
           return stale.length;
@@ -206,38 +188,46 @@ export const syncLibrary = inngest.createFunction(
           );
           if (stale.length === 0) return 0;
 
-          const updates: {
-            id: string;
-            mood: string;
-            energy: string;
-            danceability: string;
-            vibeTags: string[];
-          }[] = [];
-
+          const batches: (typeof stale)[] = [];
           for (let i = 0; i < stale.length; i += CLAUDE_BATCH_SIZE) {
-            const batch = stale.slice(i, i + CLAUDE_BATCH_SIZE);
-            const { system, user } = buildClassifyPrompt(
-              batch.map((t) => ({ name: t.name, artist: t.artist }))
-            );
-            const { results, inputTokens, outputTokens } =
-              await classifyTracks(system, user);
-
-            console.log(
-              `Claude classify batch ${i / CLAUDE_BATCH_SIZE}: ${inputTokens} input, ${outputTokens} output tokens`
-            );
-
-            for (let j = 0; j < batch.length && j < results.length; j++) {
-              const classification = results[j];
-              if (!isValidClassification(classification)) continue;
-              updates.push({
-                id: batch[j]!.id,
-                mood: classification.mood,
-                energy: classification.energy,
-                danceability: classification.danceability,
-                vibeTags: classification.vibeTags,
-              });
-            }
+            batches.push(stale.slice(i, i + CLAUDE_BATCH_SIZE));
           }
+
+          const batchResults = await Promise.all(
+            batches.map(async (batch, batchIdx) => {
+              const { system, user } = buildClassifyPrompt(
+                batch.map((t) => ({ name: t.name, artist: t.artist }))
+              );
+              const { results, inputTokens, outputTokens } =
+                await classifyTracks(system, user);
+
+              console.log(
+                `Claude classify batch ${batchIdx}: ${inputTokens} input, ${outputTokens} output tokens`
+              );
+
+              return batch.map((track, j) => {
+                const classification = j < results.length ? results[j] : null;
+                if (classification && isValidClassification(classification)) {
+                  return {
+                    id: track.id,
+                    mood: classification.mood as string | null,
+                    energy: classification.energy as string | null,
+                    danceability: classification.danceability as string | null,
+                    vibeTags: classification.vibeTags,
+                  };
+                }
+                return {
+                  id: track.id,
+                  mood: null as string | null,
+                  energy: null as string | null,
+                  danceability: null as string | null,
+                  vibeTags: [] as string[],
+                };
+              });
+            })
+          );
+
+          const updates = batchResults.flat();
 
           await trackRepository.updateClaudeClassification(updates);
           return stale.length;
@@ -245,39 +235,6 @@ export const syncLibrary = inngest.createFunction(
       );
       if (processed < CLAUDE_CLASSIFY_CHUNK_SIZE) break;
       claudeOffset += CLAUDE_CLASSIFY_CHUNK_SIZE;
-    }
-
-    // Step 6c: Set track enrichment versions
-    let trackSpotifyVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-tracks/set-spotify-version-${trackSpotifyVersionOffset}`,
-        async () => {
-          return trackRepository.setEnrichmentVersion(
-            "trackSpotifyEnrichment",
-            SPOTIFY_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      trackSpotifyVersionOffset += SET_VERSION_CHUNK_SIZE;
-    }
-
-    let trackClaudeVersionOffset = 0;
-    while (true) {
-      const updated = await step.run(
-        `enrich-tracks/set-claude-version-${trackClaudeVersionOffset}`,
-        async () => {
-          return trackRepository.setEnrichmentVersion(
-            "trackClaudeEnrichment",
-            CLAUDE_ENRICHMENT_VERSION,
-            SET_VERSION_CHUNK_SIZE
-          );
-        }
-      );
-      if (updated < SET_VERSION_CHUNK_SIZE) break;
-      trackClaudeVersionOffset += SET_VERSION_CHUNK_SIZE;
     }
 
     await step.run("update-status", async () => {
