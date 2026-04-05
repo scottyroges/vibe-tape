@@ -2,10 +2,12 @@
 import { describe, it, expect } from "vitest";
 import {
   MAX_PLAYLIST_TRACKS,
+  SCORE_WEIGHTS,
   computeFinalScore,
   computeMathTarget,
   rankAndFilter,
   scoreTrack,
+  scoreTrackBreakdown,
   type ScoredTrack,
 } from "@/lib/playlist-scoring";
 import type { VibeProfile } from "@/lib/vibe-profile";
@@ -205,6 +207,75 @@ describe("scoreTrack", () => {
 
     const c = profile({ mood: null });
     expect(scoreTrack(a, c)).toBe(0);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// scoreTrackBreakdown — must match scoreTrack and expose the math
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("scoreTrackBreakdown", () => {
+  it("returns similarity × weight × contribution for every component", () => {
+    const candidate = profile({
+      mood: "uplifting",
+      energy: "high",
+      danceability: "high",
+      genres: ["pop", "rock"],
+      tags: ["summer"],
+    });
+    const target = profile({
+      mood: "uplifting",
+      energy: "medium", // one level off → 0.5
+      danceability: "high", // exact → 1
+      genres: ["pop"], // 1/2 jaccard
+      tags: ["winter"], // 0/2 jaccard
+    });
+    const breakdown = scoreTrackBreakdown(candidate, target);
+
+    expect(breakdown.mood.similarity).toBe(1);
+    expect(breakdown.mood.weight).toBe(SCORE_WEIGHTS.mood);
+    expect(breakdown.mood.contribution).toBeCloseTo(SCORE_WEIGHTS.mood, 10);
+
+    expect(breakdown.energy.similarity).toBe(0.5);
+    expect(breakdown.energy.contribution).toBeCloseTo(
+      0.5 * SCORE_WEIGHTS.energy,
+      10,
+    );
+
+    expect(breakdown.danceability.similarity).toBe(1);
+    expect(breakdown.genres.similarity).toBeCloseTo(1 / 2, 10);
+    expect(breakdown.tags.similarity).toBe(0);
+  });
+
+  it("total matches scoreTrack exactly", () => {
+    const candidate = profile({
+      mood: "uplifting",
+      energy: "medium",
+      danceability: "low",
+      genres: ["indie", "pop"],
+      tags: ["chill"],
+    });
+    const target = profile({
+      mood: "peaceful",
+      energy: "medium",
+      danceability: "medium",
+      genres: ["indie", "folk"],
+      tags: ["chill", "acoustic"],
+    });
+    expect(scoreTrackBreakdown(candidate, target).total).toBeCloseTo(
+      scoreTrack(candidate, target),
+      10,
+    );
+  });
+
+  it("weights sum to 1.0", () => {
+    const sum =
+      SCORE_WEIGHTS.mood +
+      SCORE_WEIGHTS.energy +
+      SCORE_WEIGHTS.danceability +
+      SCORE_WEIGHTS.genres +
+      SCORE_WEIGHTS.tags;
+    expect(sum).toBeCloseTo(1, 10);
   });
 });
 

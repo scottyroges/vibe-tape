@@ -25,13 +25,21 @@ import type { CanonicalMood } from "@/lib/prompts/classify-tracks";
  */
 export const MAX_PLAYLIST_TRACKS = 100;
 
-const WEIGHTS = {
+/**
+ * Per-component weights used by `scoreTrack`. Exported so the UI can
+ * explain *why* a track landed where it did — the detail page's
+ * expand-track breakdown multiplies similarity × weight per component
+ * to show the exact contribution to the final score.
+ */
+export const SCORE_WEIGHTS = {
   mood: 0.3,
   energy: 0.15,
   danceability: 0.15,
   genres: 0.3,
   tags: 0.1,
 } as const;
+
+const WEIGHTS = SCORE_WEIGHTS;
 
 const ENERGY_ORDINAL: Record<"low" | "medium" | "high", number> = {
   low: 0,
@@ -189,6 +197,71 @@ export function scoreTrack(
     WEIGHTS.genres * genres +
     WEIGHTS.tags * tags
   );
+}
+
+/**
+ * Per-component breakdown of `scoreTrack`. Returns similarity, weight,
+ * and weighted contribution for each of the five components plus the
+ * `total` (which matches `scoreTrack`'s return by construction).
+ *
+ * Used by the playlist detail page to explain *why* a track ranked
+ * where it did against each of the two targets — "genres 0.66 × 0.30
+ * = 0.20 contribution" is much more legible than a single aggregate.
+ * Pure function, no I/O, safe to call from the client.
+ */
+export type ScoreComponent = {
+  similarity: number;
+  weight: number;
+  contribution: number;
+};
+
+export type ScoreBreakdown = {
+  mood: ScoreComponent;
+  energy: ScoreComponent;
+  danceability: ScoreComponent;
+  genres: ScoreComponent;
+  tags: ScoreComponent;
+  total: number;
+};
+
+export function scoreTrackBreakdown(
+  candidate: VibeProfile,
+  target: VibeProfile,
+): ScoreBreakdown {
+  const components = {
+    mood: component(
+      moodSimilarity(candidate.mood, target.mood),
+      WEIGHTS.mood,
+    ),
+    energy: component(
+      ordinalSimilarity(candidate.energy, target.energy),
+      WEIGHTS.energy,
+    ),
+    danceability: component(
+      ordinalSimilarity(candidate.danceability, target.danceability),
+      WEIGHTS.danceability,
+    ),
+    genres: component(
+      jaccard(candidate.genres, target.genres),
+      WEIGHTS.genres,
+    ),
+    tags: component(jaccard(candidate.tags, target.tags), WEIGHTS.tags),
+  };
+  const total =
+    components.mood.contribution +
+    components.energy.contribution +
+    components.danceability.contribution +
+    components.genres.contribution +
+    components.tags.contribution;
+  return { ...components, total };
+}
+
+function component(similarity: number, weight: number): ScoreComponent {
+  return {
+    similarity,
+    weight,
+    contribution: similarity * weight,
+  };
 }
 
 function moodSimilarity(

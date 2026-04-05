@@ -98,6 +98,14 @@ function makePlaylist(
       claudeScore?: number | null;
       mathScore?: number | null;
       finalScore?: number | null;
+      // Vibe fields — when set, the row becomes expandable (provided
+      // the playlist also carries both targets).
+      vibeMood?: string | null;
+      vibeEnergy?: "low" | "medium" | "high" | null;
+      vibeDanceability?: "low" | "medium" | "high" | null;
+      vibeGenres?: string[];
+      vibeTags?: string[];
+      vibeUpdatedAt?: Date | null;
     }[];
     seeds?: { id: string; name: string; artistsDisplay: string }[];
     claudeTarget?: {
@@ -121,13 +129,13 @@ function makePlaylist(
     spotifyId: `sp-${t.id}`,
     album: "Album",
     albumArtUrl: null,
-    vibeMood: null,
-    vibeEnergy: null,
-    vibeDanceability: null,
-    vibeGenres: [],
-    vibeTags: [],
+    vibeMood: t.vibeMood ?? null,
+    vibeEnergy: t.vibeEnergy ?? null,
+    vibeDanceability: t.vibeDanceability ?? null,
+    vibeGenres: t.vibeGenres ?? [],
+    vibeTags: t.vibeTags ?? [],
     vibeVersion: 0,
-    vibeUpdatedAt: null,
+    vibeUpdatedAt: t.vibeUpdatedAt ?? null,
     createdAt: new Date(),
     updatedAt: new Date(),
     // Scores default to `null` — matches the router response for
@@ -439,6 +447,100 @@ describe("PlaylistDetailPage", () => {
     // Genre chips from both sides.
     expect(screen.getByText("hip-hop")).toBeInTheDocument();
     expect(screen.getByText("indie")).toBeInTheDocument();
+  });
+
+  it("renders a per-track vibe + score breakdown when expanded", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        claudeTarget: {
+          mood: "uplifting",
+          energy: "high",
+          danceability: "high",
+          genres: ["pop", "rock"],
+          tags: ["summer"],
+        },
+        mathTarget: {
+          mood: "uplifting",
+          energy: "medium",
+          danceability: "high",
+          genres: ["pop"],
+          tags: [],
+        },
+        tracks: [
+          {
+            id: "g1",
+            name: "Scored Track",
+            artistsDisplay: "The Band",
+            claudeScore: 0.7,
+            mathScore: 0.6,
+            finalScore: 0.65,
+            // Populated vibe profile makes this row expandable.
+            vibeMood: "uplifting",
+            vibeEnergy: "high",
+            vibeDanceability: "high",
+            vibeGenres: ["pop"],
+            vibeTags: ["summer"],
+            vibeUpdatedAt: new Date(),
+          },
+        ],
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Scored Track");
+
+    // The track row is a <details>; the breakdown tables live inside
+    // it but are rendered even when collapsed. Both Claude and math
+    // breakdown labels should appear (one per BreakdownTable heading).
+    const claudeLabels = screen.getAllByText(/^claude$/i);
+    const mathLabels = screen.getAllByText(/^math$/i);
+    // One from Vibe-targets card, one from the breakdown table.
+    expect(claudeLabels.length).toBeGreaterThanOrEqual(1);
+    expect(mathLabels.length).toBeGreaterThanOrEqual(1);
+
+    // Breakdown table headings exist.
+    expect(screen.getAllByText(/component/i).length).toBeGreaterThan(0);
+    // "Total" row header appears for each of the two breakdown tables.
+    expect(screen.getAllByText("Total")).toHaveLength(2);
+  });
+
+  it("leaves the row non-expandable when the track has no vibe profile", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        claudeTarget: {
+          mood: "uplifting",
+          energy: "high",
+          danceability: "high",
+          genres: ["pop"],
+          tags: [],
+        },
+        mathTarget: {
+          mood: "uplifting",
+          energy: "high",
+          danceability: "high",
+          genres: ["pop"],
+          tags: [],
+        },
+        tracks: [
+          {
+            id: "g1",
+            name: "Unclassified",
+            artistsDisplay: "The Band",
+            claudeScore: 0.5,
+            mathScore: 0.5,
+            finalScore: 0.5,
+            // vibeUpdatedAt null → trackVibeProfile returns null → no expand.
+          },
+        ],
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Unclassified");
+    // No breakdown table exists for this row.
+    expect(screen.queryByText("Total")).not.toBeInTheDocument();
   });
 
   it("does not render the targets section when both targets are null", async () => {
