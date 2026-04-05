@@ -1162,7 +1162,10 @@ directly from `track` if performance ever matters.
   call — since `rankAndFilter` enforces `MAX_PLAYLIST_TRACKS = 100` up
   front, a single POST is always enough for save, and top-up appends
   are guaranteed to stay ≤100 total playlist length (we reject
-  generating past 100 at the scoring layer).
+  generating past 100 at the scoring layer). The implementation still
+  batches at 100 URIs per request defensively, so raising
+  `MAX_PLAYLIST_TRACKS` later does not require touching this helper.
+  No-ops on an empty `uris` array.
 - **`replacePlaylistTracks(token, playlistId, uris)`** — `PUT
   /v1/playlists/{id}/tracks` with the full list. Wipes and replaces the
   track list atomically in a single call. Used by regenerate when the
@@ -1306,9 +1309,18 @@ polling cap unsticks the UI even if the TTL ever misfires.
   `tests/repositories/track.repository.test.ts`; `tests/helpers/mock-db.ts`
   gains `set` / `values` spies so repo tests can assert UPDATE/INSERT
   payloads.
-- **PR D — Spotify API client for playlist ops.** `createPlaylist`,
-  `addTracksToPlaylist`, `replacePlaylistTracks` helpers, with tests
-  mocking fetch.
+- **PR D — Spotify API client for playlist ops.** ✅ Shipped on
+  `feat/playlist-pr-d-spotify-client`. `createPlaylist`,
+  `addTracksToPlaylist`, `replacePlaylistTracks` added to
+  `src/lib/spotify.ts`; the internal `spotifyFetch` helper now accepts
+  an optional `{ method, body }` so the same rate-limit/retry path
+  covers POST/PUT writes. One drift from the sketch below:
+  `addTracksToPlaylist` defensively batches at 100 URIs per request via
+  `chunk()` even though `MAX_PLAYLIST_TRACKS = 100` means a single POST
+  is sufficient today — cheap insurance if the cap is ever relaxed.
+  Tests in `tests/lib/spotify.test.ts` mock `global.fetch` and cover
+  URL/body/headers, the empty-URI no-op, >100 URI batching, and the
+  replace path.
 - **PR E — Generate Inngest function + `playlist.generate` tRPC.** Just
   the first-run flow, ending at `PENDING`. No save/regen/top-up yet.
 - **PR F — Save/discard flow.** `playlist.save` (inline tRPC) and

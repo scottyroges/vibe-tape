@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mapTrack, fetchLikedSongs, fetchArtists } from "@/lib/spotify";
+import {
+  mapTrack,
+  fetchLikedSongs,
+  fetchArtists,
+  createPlaylist,
+  addTracksToPlaylist,
+  replacePlaylistTracks,
+} from "@/lib/spotify";
 
 function makeSpotifyItem(overrides: {
   id?: string;
@@ -317,5 +324,160 @@ describe("fetchArtists", () => {
     await expect(fetchArtists("test-token", ["a1"])).rejects.toThrow(
       "Spotify API error: 500"
     );
+  });
+});
+
+describe("createPlaylist", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("POSTs to /v1/me/playlists with the right body and returns the id", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({ id: "playlist-123" })
+    );
+
+    const id = await createPlaylist("test-token", {
+      name: "Rainy Sunday",
+      description: "A mellow vibe for a slow morning.",
+      public: false,
+    });
+
+    expect(id).toBe("playlist-123");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls[0]!;
+    expect(url).toBe("https://api.spotify.com/v1/me/playlists");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer test-token",
+      "Content-Type": "application/json",
+    });
+    expect(JSON.parse(init.body)).toEqual({
+      name: "Rainy Sunday",
+      description: "A mellow vibe for a slow morning.",
+      public: false,
+    });
+  });
+
+  it("throws on non-2xx error", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse(null, 500)
+    );
+
+    await expect(
+      createPlaylist("test-token", {
+        name: "x",
+        description: "y",
+        public: false,
+      })
+    ).rejects.toThrow("Spotify API error: 500");
+  });
+});
+
+describe("addTracksToPlaylist", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("POSTs a single batch when uris ≤ 100", async () => {
+    const uris = Array.from(
+      { length: 42 },
+      (_, i) => `spotify:track:t${i}`
+    );
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({ snapshot_id: "s1" })
+    );
+
+    await addTracksToPlaylist("test-token", "pl-1", uris);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls[0]!;
+    expect(url).toBe(
+      "https://api.spotify.com/v1/playlists/pl-1/tracks"
+    );
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ uris });
+  });
+
+  it("batches at 100 URIs per call", async () => {
+    const uris = Array.from(
+      { length: 250 },
+      (_, i) => `spotify:track:t${i}`
+    );
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(mockFetchResponse({ snapshot_id: "s" }));
+
+    await addTracksToPlaylist("test-token", "pl-1", uris);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const bodies = fetchSpy.mock.calls.map(
+      (call) => JSON.parse((call[1] as RequestInit).body as string).uris as string[]
+    );
+    expect(bodies[0]).toHaveLength(100);
+    expect(bodies[1]).toHaveLength(100);
+    expect(bodies[2]).toHaveLength(50);
+    expect(bodies.flat()).toEqual(uris);
+  });
+
+  it("is a no-op for empty uris", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch");
+
+    await addTracksToPlaylist("test-token", "pl-1", []);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("throws on non-2xx error", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse(null, 500)
+    );
+
+    await expect(
+      addTracksToPlaylist("test-token", "pl-1", ["spotify:track:a"])
+    ).rejects.toThrow("Spotify API error: 500");
+  });
+});
+
+describe("replacePlaylistTracks", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("PUTs the full uri list in a single call", async () => {
+    const uris = Array.from(
+      { length: 100 },
+      (_, i) => `spotify:track:t${i}`
+    );
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({ snapshot_id: "s1" })
+    );
+
+    await replacePlaylistTracks("test-token", "pl-1", uris);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls[0]!;
+    expect(url).toBe(
+      "https://api.spotify.com/v1/playlists/pl-1/tracks"
+    );
+    expect(init.method).toBe("PUT");
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer test-token",
+      "Content-Type": "application/json",
+    });
+    expect(JSON.parse(init.body)).toEqual({ uris });
+  });
+
+  it("throws on non-2xx error", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse(null, 500)
+    );
+
+    await expect(
+      replacePlaylistTracks("test-token", "pl-1", ["spotify:track:a"])
+    ).rejects.toThrow("Spotify API error: 500");
   });
 });
