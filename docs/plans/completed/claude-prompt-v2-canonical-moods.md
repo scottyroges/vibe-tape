@@ -1,10 +1,9 @@
 # Plan: Claude Classification Prompt v2 — Canonical Moods
 
-**Status:** Draft
+**Status:** Complete
 **Created:** 2026-04-04
-**Depends on:** [`vibe-profile-derivation.md`](vibe-profile-derivation.md)
-(PR 4a + 4b must ship first so the canonical mood list is locked and
-in use).
+**Completed:** 2026-04-04 — single PR shipped the constrained prompt, stricter validator with case/whitespace-normalizing `normalizeClaudeMood` helper, `CLAUDE_ENRICHMENT_VERSION = 2`, and `MOOD_CLUSTER` deletion from `vibe-profile.ts`. Option 1 (delete the cluster map entirely) selected. Live re-classification against the existing DB will happen on the next sync.
+**Depends on:** [`vibe-profile-derivation.md`](vibe-profile-derivation.md) (both shipped)
 
 ## Goal
 

@@ -3,25 +3,17 @@
  * enrichment data from Claude, Spotify, and Last.fm into the canonical
  * query surface used by playlist generation.
  *
- * See: .personal/docs/plans/active/vibe-profile-derivation.md
+ * See: .personal/docs/plans/completed/vibe-profile-derivation.md
  */
+
+import {
+  CANONICAL_MOODS,
+  type CanonicalMood,
+} from "@/lib/prompts/classify-tracks";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────────────────────────────
-
-export type CanonicalMood =
-  | "uplifting"
-  | "energetic"
-  | "aggressive"
-  | "melancholic"
-  | "romantic"
-  | "nostalgic"
-  | "dark"
-  | "dreamy"
-  | "playful"
-  | "confident"
-  | "peaceful";
 
 export type VibeProfile = {
   mood: CanonicalMood | null;
@@ -236,108 +228,11 @@ const GENRE_VOCAB: Set<string> = new Set([
 ]);
 
 /**
- * Maps free-form Claude mood strings to canonical moods. Unmapped values
- * return null (including intentionally-excluded ambiguous terms like
- * "soulful", "groovy", "thriller").
+ * Set of canonical moods for O(1) membership checks. Claude v2 prompt
+ * emits mood directly from this vocabulary (or null), so clustering is
+ * a simple vocabulary check — no map needed.
  */
-const MOOD_CLUSTER: Record<string, CanonicalMood> = {
-  // uplifting
-  uplifting: "uplifting",
-  joyful: "uplifting",
-  euphoric: "uplifting",
-  cheerful: "uplifting",
-  carefree: "uplifting",
-  triumphant: "uplifting",
-  empowering: "uplifting",
-  hopeful: "uplifting",
-  inspirational: "uplifting",
-  soaring: "uplifting",
-  festive: "uplifting",
-  fun: "uplifting",
-  exhilarating: "uplifting",
-  thrilling: "uplifting",
-  motivational: "uplifting",
-  spiritual: "uplifting",
-  transcendent: "uplifting",
-  // energetic
-  energetic: "energetic",
-  upbeat: "energetic",
-  powerful: "energetic",
-  epic: "energetic",
-  anthemic: "energetic",
-  "adrenaline-fueled": "energetic",
-  determined: "energetic",
-  // aggressive
-  aggressive: "aggressive",
-  angry: "aggressive",
-  intense: "aggressive",
-  heavy: "aggressive",
-  edgy: "aggressive",
-  rebellious: "aggressive",
-  chaotic: "aggressive",
-  tense: "aggressive",
-  "angst-driven": "aggressive",
-  "angst-filled": "aggressive",
-  unsettling: "aggressive",
-  // melancholic
-  melancholic: "melancholic",
-  sad: "melancholic",
-  wistful: "melancholic",
-  sentimental: "melancholic",
-  bittersweet: "melancholic",
-  vulnerable: "melancholic",
-  heartfelt: "melancholic",
-  // romantic
-  romantic: "romantic",
-  tender: "romantic",
-  passionate: "romantic",
-  sensual: "romantic",
-  sultry: "romantic",
-  warm: "romantic",
-  charming: "romantic",
-  loving: "romantic",
-  // nostalgic
-  nostalgic: "nostalgic",
-  timeless: "nostalgic",
-  contemplative: "nostalgic",
-  introspective: "nostalgic",
-  reflective: "nostalgic",
-  // dark
-  dark: "dark",
-  moody: "dark",
-  haunting: "dark",
-  mysterious: "dark",
-  eerie: "dark",
-  ominous: "dark",
-  // dreamy
-  dreamy: "dreamy",
-  ethereal: "dreamy",
-  atmospheric: "dreamy",
-  hypnotic: "dreamy",
-  psychedelic: "dreamy",
-  cinematic: "dreamy",
-  // playful
-  playful: "playful",
-  whimsical: "playful",
-  quirky: "playful",
-  humorous: "playful",
-  // confident
-  confident: "confident",
-  cool: "confident",
-  boastful: "confident",
-  funky: "confident",
-  swaggering: "confident",
-  // peaceful
-  // Note: "chill" appears in the tag IGNORE list (too generic as a Last.fm
-  // descriptor) but is valid as a Claude mood — the two paths are independent.
-  peaceful: "peaceful",
-  calm: "peaceful",
-  relaxed: "peaceful",
-  mellow: "peaceful",
-  "laid-back": "peaceful",
-  chill: "peaceful",
-  tranquil: "peaceful",
-};
+const CANONICAL_MOOD_SET: ReadonlySet<string> = new Set(CANONICAL_MOODS);
 
 const VALID_ENERGY: ReadonlySet<string> = new Set(["low", "medium", "high"]);
 
@@ -390,13 +285,19 @@ function normalizeTag(
 }
 
 /**
- * Maps a free-form Claude mood string to a canonical mood, or null if
- * unmapped.
+ * Accepts a mood string from Claude v2 (which is constrained to the
+ * canonical vocabulary) or null. Returns the mood as-is if it's in the
+ * canonical set, or null otherwise. Acts as a defensive guard — the
+ * validator in sync-library already rejects off-list moods before they
+ * ever reach this function, but we re-check here so the pure function
+ * can be called independently with untrusted data.
  */
 function clusterMood(raw: string | null): CanonicalMood | null {
   if (!raw) return null;
   const normalized = raw.toLowerCase().trim();
-  return MOOD_CLUSTER[normalized] ?? null;
+  return CANONICAL_MOOD_SET.has(normalized)
+    ? (normalized as CanonicalMood)
+    : null;
 }
 
 function validateEnergyField(

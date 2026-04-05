@@ -400,33 +400,47 @@ describe("ranking: source precedence tie-breaker", () => {
 // ──────────────────────────────────────────────────────────────────────────
 
 describe("mood clustering", () => {
+  // Claude v2 prompt constrains mood to the canonical vocabulary directly,
+  // so clusterMood is a pass-through for canonical values and null for
+  // everything else. Non-canonical legacy moods (joyful, angst-driven, etc.)
+  // no longer reach this function — they're rejected by the validator in
+  // sync-library.ts before write.
   it.each([
     ["uplifting", "uplifting"],
-    ["joyful", "uplifting"],
-    ["spiritual", "uplifting"],
-    ["transcendent", "uplifting"],
-    ["angst-driven", "aggressive"],
-    ["sultry", "romantic"],
-    ["reflective", "nostalgic"],
-    ["contemplative", "nostalgic"],
-    ["ethereal", "dreamy"],
-    ["chill", "peaceful"],
-  ])("%s → %s", (input, expected) => {
+    ["energetic", "energetic"],
+    ["aggressive", "aggressive"],
+    ["melancholic", "melancholic"],
+    ["romantic", "romantic"],
+    ["nostalgic", "nostalgic"],
+    ["dark", "dark"],
+    ["dreamy", "dreamy"],
+    ["playful", "playful"],
+    ["confident", "confident"],
+    ["peaceful", "peaceful"],
+  ])("canonical mood %s passes through", (input, expected) => {
     const result = deriveVibeProfile(
       baseInput({ claude: claude(input, null, null, []) }),
     );
     expect(result.mood).toBe(expected);
   });
 
-  it.each(["soulful", "groovy", "thriller", "mechanical", "unknown-mood"])(
-    "intentionally-excluded or unknown mood %s → null",
-    (input) => {
-      const result = deriveVibeProfile(
-        baseInput({ claude: claude(input, null, null, []) }),
-      );
-      expect(result.mood).toBeNull();
-    },
-  );
+  it.each([
+    "joyful",
+    "sad",
+    "angst-driven",
+    "sultry",
+    "soulful",
+    "groovy",
+    "spiritual",
+    "thriller",
+    "mechanical",
+    "unknown-mood",
+  ])("non-canonical mood %s → null (defensive guard)", (input) => {
+    const result = deriveVibeProfile(
+      baseInput({ claude: claude(input, null, null, []) }),
+    );
+    expect(result.mood).toBeNull();
+  });
 
   it("null mood → null", () => {
     const result = deriveVibeProfile(
@@ -435,9 +449,9 @@ describe("mood clustering", () => {
     expect(result.mood).toBeNull();
   });
 
-  it("mood is normalized for lookup (case, whitespace)", () => {
+  it("canonical mood is normalized for lookup (case, whitespace)", () => {
     const result = deriveVibeProfile(
-      baseInput({ claude: claude("  Joyful  ", null, null, []) }),
+      baseInput({ claude: claude("  Uplifting  ", null, null, []) }),
     );
     expect(result.mood).toBe("uplifting");
   });
@@ -497,7 +511,7 @@ describe("missing source behavior", () => {
   it("no Last.fm data: tags come from Claude and Spotify era only", () => {
     const result = deriveVibeProfile(
       baseInput({
-        claude: claude("joyful", "high", "high", ["hip-hop", "energetic"]),
+        claude: claude("uplifting", "high", "high", ["hip-hop", "energetic"]),
         trackSpotify: { derivedEra: "2020s" },
       }),
     );
@@ -510,7 +524,7 @@ describe("missing source behavior", () => {
   it("no Spotify era: other sources still produce output", () => {
     const result = deriveVibeProfile(
       baseInput({
-        claude: claude("joyful", "high", "medium", ["rock"]),
+        claude: claude("uplifting", "high", "medium", ["rock"]),
       }),
     );
     expect(result.genres).toEqual(["rock"]);

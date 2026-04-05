@@ -11,7 +11,7 @@ import {
 describe("enrichment version constants", () => {
   it("exports per-source version constants", () => {
     expect(SPOTIFY_ENRICHMENT_VERSION).toBe(1);
-    expect(CLAUDE_ENRICHMENT_VERSION).toBe(1);
+    expect(CLAUDE_ENRICHMENT_VERSION).toBe(2);
     expect(LASTFM_ENRICHMENT_VERSION).toBe(1);
     expect(VIBE_DERIVATION_VERSION).toBe(1);
   });

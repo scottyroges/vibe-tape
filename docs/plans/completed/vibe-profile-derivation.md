@@ -1,8 +1,18 @@
 # Plan: Vibe Profile Derivation
 
-**Status:** Draft
+**Status:** Complete
 **Created:** 2026-04-04
+**Completed:** 2026-04-04 — PR 4a (#39) shipped the pure function, PR 4b (#40) wired it into the sync + Last.fm pipelines. Live run against the local DB produced clean canonical moods (11-way cluster) and normalized genre/tag arrays for all 1,457 tracks, with 146 null moods matching the hybrid cluster policy (72 original Claude failures + 74 intentionally-excluded ambiguous terms like `soulful`/`groovy`). Next: Claude prompt v2 to constrain mood at the source, shrinking the 74-gap to zero.
 **Parent plan:** [`per-source-versioning-async-lastfm.md`](per-source-versioning-async-lastfm.md) — PR 4 section is superseded by this document.
+
+> **Historical note:** This plan's `MOOD_CLUSTER` map (the ~90-entry
+> `Record<string, CanonicalMood>`) was deleted in the follow-up
+> [`claude-prompt-v2-canonical-moods.md`](claude-prompt-v2-canonical-moods.md)
+> plan once Claude was constrained to emit canonical moods directly.
+> Code samples in this document referencing `MOOD_CLUSTER` reflect the
+> originally-shipped implementation — the current implementation in
+> `src/lib/vibe-profile.ts` does a direct `CANONICAL_MOOD_SET.has()`
+> vocabulary check instead.
 
 ## Goal
 
