@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTRPC } from "@/lib/trpc/client";
@@ -8,9 +9,22 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { MusicNoteIcon } from "@/components/icons";
 import styles from "./confirm.module.css";
 
-const DURATION_PRESETS = [30, 60, 90, 120] as const;
 const DEFAULT_DURATION_MINUTES = 60;
+const MIN_DURATION_MINUTES = 15;
+// Matches the tRPC validator upper bound. At ~3.5 min/track average,
+// 360 min comfortably covers the 100-track `MAX_PLAYLIST_TRACKS` ceiling;
+// requesting more just causes the scoring pipeline to stop at the cap.
+const MAX_DURATION_MINUTES = 360;
+const DURATION_STEP_MINUTES = 5;
 const USER_INTENT_MAX_LENGTH = 280;
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  if (rem === 0) return hours === 1 ? "1 hr" : `${hours} hr`;
+  return `${hours} hr ${rem} min`;
+}
 
 export default function ConfirmPage() {
   const router = useRouter();
@@ -80,10 +94,12 @@ export default function ConfirmPage() {
         {seeds.map((song) => (
           <div key={song.id} className={styles.seedRow}>
             {song.albumArtUrl ? (
-              <img
+              <Image
                 className={styles.albumArt}
                 src={song.albumArtUrl}
                 alt=""
+                width={48}
+                height={48}
               />
             ) : (
               <div className={styles.albumArtPlaceholder}>
@@ -99,23 +115,29 @@ export default function ConfirmPage() {
       </div>
 
       <div className={styles.section}>
-        <label className={styles.sectionLabel}>Playlist length</label>
-        <div className={styles.durationPresets}>
-          {DURATION_PRESETS.map((mins) => (
-            <button
-              key={mins}
-              type="button"
-              className={
-                durationMinutes === mins
-                  ? `${styles.durationButton} ${styles.durationButtonActive}`
-                  : styles.durationButton
-              }
-              onClick={() => setDurationMinutes(mins)}
-              disabled={generateMutation.isPending}
-            >
-              {mins % 60 === 0 ? `${mins / 60}hr` : `${mins}min`}
-            </button>
-          ))}
+        <div className={styles.durationHeader}>
+          <label htmlFor="duration-slider" className={styles.sectionLabel}>
+            Playlist length
+          </label>
+          <span className={styles.durationValue}>
+            {formatDuration(durationMinutes)}
+          </span>
+        </div>
+        <input
+          id="duration-slider"
+          type="range"
+          className={styles.durationSlider}
+          min={MIN_DURATION_MINUTES}
+          max={MAX_DURATION_MINUTES}
+          step={DURATION_STEP_MINUTES}
+          value={durationMinutes}
+          onChange={(e) => setDurationMinutes(Number(e.target.value))}
+          disabled={generateMutation.isPending}
+          aria-valuetext={formatDuration(durationMinutes)}
+        />
+        <div className={styles.durationRange}>
+          <span>{formatDuration(MIN_DURATION_MINUTES)}</span>
+          <span>{formatDuration(MAX_DURATION_MINUTES)}</span>
         </div>
       </div>
 

@@ -109,13 +109,17 @@ describe("ConfirmPage", () => {
     expect(screen.getByText("Song C")).toBeInTheDocument();
   });
 
-  it("renders duration presets and the Generate button", async () => {
+  it("renders the duration slider and the Generate button", async () => {
     mockGet.mockReturnValue("t1,t2,t3");
     renderWithClient(<ConfirmPage />);
 
     await screen.findByText("Song A");
-    expect(screen.getByRole("button", { name: /30min/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^1hr$/i })).toBeInTheDocument();
+    const slider = screen.getByLabelText(/playlist length/i);
+    expect(slider).toHaveAttribute("type", "range");
+    expect(slider).toHaveAttribute("min", "15");
+    expect(slider).toHaveAttribute("max", "360");
+    // Default is 60 minutes — visible as a formatted label.
+    expect(screen.getByText("1 hr")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /generate playlist/i })
     ).toBeInTheDocument();
@@ -140,19 +144,28 @@ describe("ConfirmPage", () => {
     });
   });
 
-  it("sends a custom duration when a preset is clicked", async () => {
+  it("sends a custom duration when the slider is changed", async () => {
     const user = userEvent.setup();
     mockGet.mockReturnValue("t1,t2,t3");
     renderWithClient(<ConfirmPage />);
 
     await screen.findByText("Song A");
-    await user.click(screen.getByRole("button", { name: /^90min$/i }));
+    const slider = screen.getByLabelText(/playlist length/i);
+    // `fireEvent.change` would also work, but user-event's `clear`+`type`
+    // doesn't fire on range inputs. Directly set the value.
+    await user.click(slider);
+    // Using a raw `change` via fireEvent is cleanest for range inputs.
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.change(slider, { target: { value: "180" } });
+    // Label should reflect the new value.
+    expect(screen.getByText("3 hr")).toBeInTheDocument();
+
     await user.click(
       screen.getByRole("button", { name: /generate playlist/i })
     );
 
     const vars = mockGenerateMutate.mock.calls[0]![0];
-    expect(vars).toMatchObject({ targetDurationMinutes: 90 });
+    expect(vars).toMatchObject({ targetDurationMinutes: 180 });
   });
 
   it("sends userIntent when the textarea is non-empty", async () => {

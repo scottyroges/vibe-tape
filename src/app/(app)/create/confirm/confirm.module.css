@@ -93,38 +93,77 @@
   letter-spacing: 0.05em;
 }
 
-.durationPresets {
+.durationHeader {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.durationButton {
-  flex: 1;
-  min-width: 4rem;
-  padding: 0.625rem 1rem;
-  background: transparent;
+.durationValue {
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--color-foreground);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.durationSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  outline: none;
   cursor: pointer;
-  transition: all 0.15s ease;
+  margin: 0.25rem 0;
 }
 
-.durationButton:hover:not(:disabled) {
-  border-color: var(--color-primary);
-}
-
-.durationButton:disabled {
+.durationSlider:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.durationButtonActive {
+.durationSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   background: var(--color-primary);
-  color: var(--color-background);
-  border-color: var(--color-primary);
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s ease;
+}
+
+.durationSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.durationSlider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s ease;
+}
+
+.durationSlider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+}
+
+.durationSlider:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+}
+
+.durationRange {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--color-muted);
 }
 
 .vibeInput {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "@/lib/trpc/client";
@@ -153,10 +154,12 @@ export default function CreatePage() {
                 onClick={() => toggleSelection(song.id)}
               >
                 {song.albumArtUrl ? (
-                  <img
+                  <Image
                     className={styles.albumArt}
                     src={song.albumArtUrl}
                     alt=""
+                    width={48}
+                    height={48}
                     loading="lazy"
                   />
                 ) : (

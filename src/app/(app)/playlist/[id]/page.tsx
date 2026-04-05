@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -11,22 +12,7 @@ import {
 import { useTRPC } from "@/lib/trpc/client";
 import { MusicNoteIcon } from "@/components/icons";
 import styles from "./playlist.module.css";
-
-/**
- * Poll interval while the playlist is GENERATING. 1s gives the user
- * near-instant feedback (realistic generation takes 3–6 seconds).
- * Exported so tests can drive fake timers precisely.
- */
-export const POLL_INTERVAL_MS = 1000;
-
-/**
- * Hard cap on client-side polling as a belt-and-suspenders guard
- * against a stuck GENERATING row whose server-side TTL override also
- * misfires. 120 * 1s = 2 minutes (20× realistic generation time).
- * Exported so tests can match the number without duplicating the
- * constant.
- */
-export const MAX_POLLS = 120;
+import { MAX_POLLS, POLL_INTERVAL_MS } from "./constants";
 
 export default function PlaylistDetailPage() {
   const params = useParams<{ id: string }>();
@@ -340,7 +326,13 @@ function TrackRow({
   return (
     <div className={styles.trackRow}>
       {albumArtUrl ? (
-        <img className={styles.albumArt} src={albumArtUrl} alt="" />
+        <Image
+          className={styles.albumArt}
+          src={albumArtUrl}
+          alt=""
+          width={44}
+          height={44}
+        />
       ) : (
         <div className={styles.albumArtPlaceholder}>
           <MusicNoteIcon />
