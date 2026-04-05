@@ -175,7 +175,9 @@ export const generatePlaylist = inngest.createFunction(
       requiredTrackIds: seedTrackIds,
     });
 
-    // 6. Persist + flip status: GENERATING → PENDING.
+    // 6. Persist + flip status: GENERATING → PENDING. `final` already
+    //    carries the score triples, so pull them out alongside the IDs —
+    //    this keeps scores aligned with the final order the UI shows.
     await step.run("save-playlist", async () => {
       await playlistRepository.completeGeneration(playlistId, {
         vibeName: criteria.vibeName,
@@ -183,6 +185,12 @@ export const generatePlaylist = inngest.createFunction(
         claudeTarget: criteria.target,
         mathTarget,
         generatedTrackIds: final.map((s) => s.trackId),
+        trackScores: final.map((s) => ({
+          trackId: s.trackId,
+          claude: s.claudeScore,
+          math: s.mathScore,
+          final: s.finalScore,
+        })),
       });
     });
 

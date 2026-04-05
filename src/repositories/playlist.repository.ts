@@ -1,8 +1,12 @@
 import { db } from "@/lib/db";
 import { sql } from "kysely";
 import { createId } from "@/lib/id";
-import type { Playlist } from "@/domain/types";
-import type { Track, TrackWithDisplayFields } from "@/domain/types";
+import type {
+  Playlist,
+  Track,
+  TrackScore,
+  TrackWithDisplayFields,
+} from "@/domain/types";
 import type { VibeProfile } from "@/lib/vibe-profile";
 import { trackRepository } from "@/repositories/track.repository";
 
@@ -37,6 +41,7 @@ function toDomain(row: {
   seedSongIds: string[];
   status: Playlist["status"];
   generatedTrackIds: string[];
+  trackScores: unknown | null;
   targetDurationMinutes: number;
   userIntent: string | null;
   claudeTarget: unknown | null;
@@ -51,6 +56,7 @@ function toDomain(row: {
     ...row,
     claudeTarget: row.claudeTarget as VibeProfile | null,
     mathTarget: row.mathTarget as VibeProfile | null,
+    trackScores: row.trackScores as TrackScore[] | null,
   };
 }
 
@@ -117,6 +123,7 @@ export const playlistRepository = {
       claudeTarget: VibeProfile;
       mathTarget: VibeProfile;
       generatedTrackIds: string[];
+      trackScores: TrackScore[];
     }
   ): Promise<void> {
     await db
@@ -127,6 +134,7 @@ export const playlistRepository = {
         claudeTarget: data.claudeTarget as unknown as object,
         mathTarget: data.mathTarget as unknown as object,
         generatedTrackIds: data.generatedTrackIds,
+        trackScores: data.trackScores as unknown as object,
         status: "PENDING",
         updatedAt: new Date(),
       })
@@ -135,32 +143,49 @@ export const playlistRepository = {
   },
 
   /**
-   * Full replacement of `generatedTrackIds`. Used by `regenerate-playlist`.
+   * Full replacement of `generatedTrackIds` + `trackScores`. Used by
+   * `regenerate-playlist`. Both fields are replaced atomically so the
+   * scores stay aligned with the tracks.
    */
   async updateTracks(
     playlistId: string,
-    trackIds: string[]
+    trackIds: string[],
+    trackScores: TrackScore[]
   ): Promise<void> {
     await db
       .updateTable("playlist")
-      .set({ generatedTrackIds: trackIds, updatedAt: new Date() })
+      .set({
+        generatedTrackIds: trackIds,
+        trackScores: trackScores as unknown as object,
+        updatedAt: new Date(),
+      })
       .where("id", "=", playlistId)
       .execute();
   },
 
   /**
-   * Appends new IDs onto the end of `generatedTrackIds` (PG `array_cat`).
-   * Used by `top-up-playlist`.
+   * Appends new IDs onto the end of `generatedTrackIds` and the matching
+   * score triples onto `trackScores`. Used by `top-up-playlist`. If the
+   * existing row has `trackScores IS NULL` (legacy row from before the
+   * column existed), the append starts with just the new scores — the
+   * old tracks will render without scores but nothing crashes.
    */
   async appendTracks(
     playlistId: string,
-    trackIds: string[]
+    trackIds: string[],
+    trackScores: TrackScore[]
   ): Promise<void> {
     if (trackIds.length === 0) return;
     await db
       .updateTable("playlist")
       .set({
         generatedTrackIds: sql`array_cat(generated_track_ids, ${trackIds}::text[])`,
+        // `coalesce(track_scores, '[]'::jsonb) || $newScores::jsonb` —
+        // append the new score triples to whatever is currently stored,
+        // treating NULL as an empty array so legacy rows don't explode.
+        trackScores: sql`coalesce(track_scores, '[]'::jsonb) || ${JSON.stringify(
+          trackScores,
+        )}::jsonb`,
         updatedAt: new Date(),
       })
       .where("id", "=", playlistId)

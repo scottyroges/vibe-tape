@@ -141,10 +141,38 @@ export const playlistRouter = router({
       );
       const byId = new Map(resolved.map((t) => [t.id, t]));
 
-      // Re-order to match each source array — the query is unordered.
+      // Index the persisted score triples by trackId so we can attach
+      // them to the resolved track rows. Legacy rows without a
+      // `trackScores` column (generated before the field existed) fall
+      // through with no scores — the UI shows the rows plain.
+      const scoresByTrackId = new Map(
+        (playlist.trackScores ?? []).map((s) => [s.trackId, s]),
+      );
+
+      // Re-order to match each source array — the query is unordered —
+      // and attach the score triple from the persisted array. Seeds
+      // carry their own score triple only if they also appear in
+      // `generatedTrackIds` (seeds are passed as `requiredTrackIds` at
+      // generation time, so in practice they always do).
       const orderedTracks = playlist.generatedTrackIds
-        .map((id) => byId.get(id))
-        .filter((t): t is (typeof resolved)[number] => t !== undefined);
+        .map((id) => {
+          const track = byId.get(id);
+          if (!track) return undefined;
+          const score = scoresByTrackId.get(id);
+          return {
+            ...track,
+            claudeScore: score?.claude ?? null,
+            mathScore: score?.math ?? null,
+            finalScore: score?.final ?? null,
+          };
+        })
+        .filter(
+          (t): t is (typeof resolved)[number] & {
+            claudeScore: number | null;
+            mathScore: number | null;
+            finalScore: number | null;
+          } => t !== undefined,
+        );
       const orderedSeeds = playlist.seedSongIds
         .map((id) => byId.get(id))
         .filter((t): t is (typeof resolved)[number] => t !== undefined);

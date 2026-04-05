@@ -306,6 +306,9 @@ export default function PlaylistDetailPage() {
               albumArtUrl={t.albumArtUrl}
               title={t.name}
               artist={t.artistsDisplay}
+              claudeScore={t.claudeScore}
+              mathScore={t.mathScore}
+              finalScore={t.finalScore}
             />
           ))}
         </div>
@@ -318,11 +321,23 @@ function TrackRow({
   albumArtUrl,
   title,
   artist,
+  claudeScore,
+  mathScore,
+  finalScore,
 }: {
   albumArtUrl: string | null;
   title: string;
   artist: string;
+  // All three scores are optional so this component works for both
+  // generated tracks (always have scores) and seed-only rows (no
+  // persisted scores). When any is `null`/`undefined`, the score cell
+  // is omitted.
+  claudeScore?: number | null;
+  mathScore?: number | null;
+  finalScore?: number | null;
 }) {
+  const hasScores =
+    claudeScore != null && mathScore != null && finalScore != null;
   return (
     <div className={styles.trackRow}>
       {albumArtUrl ? (
@@ -342,6 +357,28 @@ function TrackRow({
         <div className={styles.trackName}>{title}</div>
         <div className={styles.artistName}>{artist}</div>
       </div>
+      {hasScores && (
+        <div
+          className={styles.scoreCell}
+          aria-label={`Scores — average ${formatScore(finalScore)}, Claude ${formatScore(claudeScore)}, math ${formatScore(mathScore)}`}
+          title={`Claude ${formatScore(claudeScore)} · math ${formatScore(mathScore)}`}
+        >
+          <div className={styles.scoreFinal}>{formatScore(finalScore)}</div>
+          <div className={styles.scoreBreakdown}>
+            <span>C {formatScore(claudeScore)}</span>
+            <span>M {formatScore(mathScore)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Scores come back in `[0, 1]`; display as a 2-decimal number. `0.00`
+ * and `1.00` both render cleanly with tabular digits so the column
+ * aligns.
+ */
+function formatScore(value: number): string {
+  return value.toFixed(2);
 }
