@@ -173,10 +173,23 @@ describe("playlistRepository", () => {
           claudeTarget,
           mathTarget,
           generatedTrackIds: ["t1", "t2", "t3"],
-          trackScores,
           status: "PENDING",
         })
       );
+
+      // Regression guard. `track_scores` is a JSONB column but
+      // node-postgres serializes a bare JS Array as a PG array literal
+      // (`{…}`) unless we force a `::jsonb` cast. Passing the raw
+      // array through Kysely's `.set({ trackScores })` blows up at
+      // query time with `invalid input syntax for type json`. The fix
+      // wraps the value in a `sql` template fragment — so the value
+      // the call site hands to `.set()` must NOT be a plain Array.
+      const setCall = set.mock.calls[0]![0] as { trackScores: unknown };
+      expect(Array.isArray(setCall.trackScores)).toBe(false);
+      // And it should be a Kysely raw expression (`RawBuilder`) —
+      // identifiable by `toOperationNode` on its prototype.
+      expect(typeof (setCall.trackScores as { toOperationNode?: unknown })
+        ?.toOperationNode).toBe("function");
     });
   });
 
@@ -196,9 +209,14 @@ describe("playlistRepository", () => {
       expect(set).toHaveBeenCalledWith(
         expect.objectContaining({
           generatedTrackIds: ["t9", "t8"],
-          trackScores,
         })
       );
+      // Same regression guard as `completeGeneration` — the scores
+      // must go through a `::jsonb` cast, never as a raw JS Array.
+      const setCall = set.mock.calls[0]![0] as { trackScores: unknown };
+      expect(Array.isArray(setCall.trackScores)).toBe(false);
+      expect(typeof (setCall.trackScores as { toOperationNode?: unknown })
+        ?.toOperationNode).toBe("function");
     });
   });
 
