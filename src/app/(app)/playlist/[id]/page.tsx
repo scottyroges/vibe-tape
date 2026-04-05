@@ -307,22 +307,6 @@ export default function PlaylistDetailPage() {
         </section>
       )}
 
-      {seeds.length > 0 && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionHeading}>Seeds</h2>
-          <div className={styles.trackList}>
-            {seeds.map((t) => (
-              <TrackRow
-                key={t.id}
-                albumArtUrl={t.albumArtUrl}
-                title={t.name}
-                artist={t.artistsDisplay}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
       <section className={styles.section}>
         <h2 className={styles.sectionHeading}>
           Tracks ({tracks.length})
@@ -344,6 +328,29 @@ export default function PlaylistDetailPage() {
           ))}
         </div>
       </section>
+
+      {seeds.length > 0 && (
+        <details className={styles.seedsDisclosure}>
+          <summary className={styles.seedsSummary}>
+            <span className={styles.seedsSummaryLabel}>
+              Seeds ({seeds.length})
+            </span>
+            <span className={styles.seedsSummaryHint}>
+              the tracks this vibe was built from
+            </span>
+          </summary>
+          <div className={styles.trackList}>
+            {seeds.map((t) => (
+              <TrackRow
+                key={t.id}
+                albumArtUrl={t.albumArtUrl}
+                title={t.name}
+                artist={t.artistsDisplay}
+              />
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

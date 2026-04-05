@@ -368,6 +368,53 @@
   padding-top: 0.3125rem;
 }
 
+/* Seeds disclosure — lives below Tracks so the generated playlist is
+   the hero. Subtle-by-default so it doesn't compete with the main
+   track list for attention, but still one click away. */
+.seedsDisclosure {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+}
+
+.seedsSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.375rem 0.25rem;
+  cursor: pointer;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  list-style: none;
+  user-select: none;
+}
+
+.seedsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.seedsSummary::before {
+  content: "›";
+  display: inline-block;
+  transition: transform 0.15s ease;
+  width: 0.75rem;
+  color: var(--color-muted);
+}
+
+.seedsDisclosure[open] > .seedsSummary::before {
+  transform: rotate(90deg);
+}
+
+.seedsSummaryLabel {
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.seedsSummaryHint {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
 .spinner {
   width: 40px;
   height: 40px;

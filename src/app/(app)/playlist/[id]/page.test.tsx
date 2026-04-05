@@ -389,6 +389,46 @@ describe("PlaylistDetailPage", () => {
     expect(screen.getByText("Seed One")).toBeInTheDocument();
   });
 
+  it("collapses seeds into a disclosure below the Tracks section", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        tracks: [{ id: "g1", name: "Gen One", artistsDisplay: "A1" }],
+        seeds: [
+          { id: "s1", name: "Seed Alpha", artistsDisplay: "A2" },
+          { id: "s2", name: "Seed Beta", artistsDisplay: "A3" },
+        ],
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Gen One");
+
+    // Summary exists and reports the seed count.
+    const summary = screen.getByText(/seeds \(2\)/i);
+    expect(summary).toBeInTheDocument();
+
+    // The disclosure is collapsed by default — native <details> has
+    // no `open` attribute until the user clicks.
+    const details = summary.closest("details");
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute("open");
+
+    // DOM order: Tracks section comes before the seeds disclosure,
+    // so the generated playlist is the hero above the fold.
+    const tracksHeading = screen.getByRole("heading", { name: /tracks \(/i });
+    // compareDocumentPosition returns 4 when `b` follows `a`.
+    expect(
+      tracksHeading.compareDocumentPosition(details!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // Seed rows still live in the DOM (inside the collapsed <details>)
+    // so the user gets them instantly on expand.
+    expect(screen.getByText("Seed Alpha")).toBeInTheDocument();
+    expect(screen.getByText("Seed Beta")).toBeInTheDocument();
+  });
+
   it("renders per-track score triples on generated tracks", async () => {
     mockGetByIdFn.mockResolvedValue(
       makePlaylist({
