@@ -278,6 +278,29 @@ describe("decade normalization", () => {
     expect(result.tags).toEqual(["2020s"]);
   });
 
+  it("Spotify derivedEra 1980s + Last.fm 80s dedupe with hit promotion", () => {
+    // After normalization both become "80s". With hitCount=2, the entry
+    // outranks any single-hit tag.
+    const result = deriveVibeProfile(
+      baseInput({
+        trackSpotify: { derivedEra: "1980s" },
+        trackLastfm: { tags: ["80s", "driving"] },
+      }),
+    );
+    // 80s: hitCount=2, driving: hitCount=1 — so 80s is first.
+    expect(result.tags).toEqual(["80s", "driving"]);
+  });
+
+  it("Spotify derivedEra 80s + Last.fm 80s dedupe to single entry", () => {
+    const result = deriveVibeProfile(
+      baseInput({
+        trackSpotify: { derivedEra: "80s" },
+        trackLastfm: { tags: ["80s"] },
+      }),
+    );
+    expect(result.tags).toEqual(["80s"]);
+  });
+
   it("compound decade tags pass through as single tokens", () => {
     const result = deriveVibeProfile(
       baseInput({ claude: claude(null, null, null, ["80s funk"]) }),

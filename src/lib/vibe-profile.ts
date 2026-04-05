@@ -109,6 +109,7 @@ const SYNONYMS: Record<string, string> = {
   dnb: "drum-and-bass",
   "lo fi": "lo-fi",
   lofi: "lo-fi",
+  jungle: "jungle",
   // decades — long form for 1900s collapses to short form; 2000s+ stays long
   "1950s": "50s",
   "1960s": "60s",
@@ -223,7 +224,6 @@ const GENRE_VOCAB: Set<string> = new Set([
   "pop-punk",
   "indie-pop",
   "dream-pop",
-  "synth-pop",
   // other
   "ska",
   "motown",
