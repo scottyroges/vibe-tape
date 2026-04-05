@@ -110,7 +110,7 @@ All app logic is exposed via tRPC procedures (see [ADR 002](decisions/002-trpc-a
 |--------|---------------|------|
 | `health` | `ping` | Implemented |
 | `library` | `sync`, `list`, `search` | Tier 1 (partial) |
-| `playlist` | `generate`, `list`, `getById`, `refresh` | Tier 1 (`generate` implemented) |
+| `playlist` | `generate`, `getById`, `save`, `discard`, `list`, `refresh` | Tier 1 (`generate` / `getById` / `save` / `discard` implemented) |
 | `session` | `create`, `join`, `generate` | Tier 3 |
 
 ---
