@@ -368,6 +368,40 @@
   padding-top: 0.3125rem;
 }
 
+/* Inline × button on a track row — removes the track from the playlist.
+   Stops click propagation so it doesn't toggle the <details> expand on
+   expandable rows. Muted by default, primary on hover, so it reads as
+   a secondary action and doesn't compete with scores for attention. */
+.removeButton {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 0.25rem;
+  background: transparent;
+  color: var(--color-muted);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.removeButton:hover:not(:disabled) {
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+  background: var(--color-background);
+}
+
+.removeButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Small inline pill on a track row's title when the track is one of
    the seeds the playlist was built from. Compact so it reads as
    metadata, not a primary element — just enough to tell the user

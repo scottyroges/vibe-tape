@@ -120,6 +120,22 @@ export default function PlaylistDetailPage() {
     })
   );
 
+  // Remove-track is inline — no GENERATING flip, no polling loop. On
+  // success we just invalidate getById and the dashboard list so the
+  // reduced track count shows up.
+  const removeTrackMutation = useMutation(
+    trpc.playlist.removeTrack.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.getById.queryKey({ id: playlistId }),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.listByUser.queryKey(),
+        });
+      },
+    })
+  );
+
   if (playlistQuery.isLoading) {
     return (
       <div className={styles.container}>
@@ -331,6 +347,19 @@ export default function PlaylistDetailPage() {
               claudeTarget={claudeTarget}
               mathTarget={mathTarget}
               isSeed={seedIdSet.has(t.id)}
+              onRemove={
+                status === "PENDING" || status === "SAVED"
+                  ? () =>
+                      removeTrackMutation.mutate({
+                        playlistId,
+                        trackId: t.id,
+                      })
+                  : undefined
+              }
+              isRemoving={
+                removeTrackMutation.isPending &&
+                removeTrackMutation.variables?.trackId === t.id
+              }
             />
           ))}
         </div>
@@ -376,6 +405,8 @@ function TrackRow({
   claudeTarget,
   mathTarget,
   isSeed = false,
+  onRemove,
+  isRemoving = false,
 }: {
   albumArtUrl: string | null;
   title: string;
@@ -397,6 +428,11 @@ function TrackRow({
   // are the ones they originally picked. Seeds are guaranteed to
   // appear in the generated list via `requiredTrackIds`.
   isSeed?: boolean;
+  // When provided, renders an inline "×" remove button that calls
+  // this callback. The button stops click propagation so clicking it
+  // doesn't toggle the <details> expand.
+  onRemove?: () => void;
+  isRemoving?: boolean;
 }) {
   const hasScores =
     claudeScore != null && mathScore != null && finalScore != null;
@@ -446,6 +482,26 @@ function TrackRow({
             <span>M {formatScore(mathScore)}</span>
           </div>
         </div>
+      )}
+      {onRemove && (
+        <button
+          type="button"
+          className={styles.removeButton}
+          aria-label={`Remove ${title} from playlist`}
+          title="Remove from playlist"
+          disabled={isRemoving}
+          onClick={(e) => {
+            // Stop propagation so clicking the × doesn't toggle the
+            // <details> expand on expandable rows. preventDefault is
+            // also needed because <summary> treats nested clicks as
+            // summary clicks unless the default is canceled.
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+        >
+          {isRemoving ? "…" : "×"}
+        </button>
       )}
     </>
   );

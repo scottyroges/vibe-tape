@@ -9,6 +9,7 @@ const {
   mockDiscardMutate,
   mockRegenerateMutate,
   mockTopUpMutate,
+  mockRemoveTrackMutate,
   mockRouterPush,
 } = vi.hoisted(() => ({
   mockGetByIdFn: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockDiscardMutate: vi.fn(),
   mockRegenerateMutate: vi.fn(),
   mockTopUpMutate: vi.fn(),
+  mockRemoveTrackMutate: vi.fn(),
   mockRouterPush: vi.fn(),
 }));
 
@@ -59,6 +61,12 @@ vi.mock("@/lib/trpc/client", () => ({
       topUp: {
         mutationOptions: (opts?: { onSuccess?: () => void }) => ({
           mutationFn: mockTopUpMutate,
+          onSuccess: opts?.onSuccess,
+        }),
+      },
+      removeTrack: {
+        mutationOptions: (opts?: { onSuccess?: () => void }) => ({
+          mutationFn: mockRemoveTrackMutate,
           onSuccess: opts?.onSuccess,
         }),
       },
@@ -193,6 +201,7 @@ describe("PlaylistDetailPage", () => {
     mockDiscardMutate.mockResolvedValue({ ok: true });
     mockRegenerateMutate.mockResolvedValue({ playlistId: "pl-1" });
     mockTopUpMutate.mockResolvedValue({ playlistId: "pl-1" });
+    mockRemoveTrackMutate.mockResolvedValue({ ok: true });
   });
 
   it("shows the spinner + polling message while GENERATING", async () => {
@@ -630,5 +639,67 @@ describe("PlaylistDetailPage", () => {
     // No `C 0.xx` / `M 0.xx` text anywhere for a row without scores.
     expect(screen.queryByText(/C 0\./)).not.toBeInTheDocument();
     expect(screen.queryByText(/M 0\./)).not.toBeInTheDocument();
+  });
+
+  it("fires playlist.removeTrack when the × button is clicked on a PENDING row", async () => {
+    const user = userEvent.setup();
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        tracks: [
+          { id: "g1", name: "Keeper", artistsDisplay: "A1" },
+          { id: "g2", name: "Goner", artistsDisplay: "A2" },
+        ],
+      }),
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Goner");
+    const removeButton = screen.getByRole("button", {
+      name: /remove goner from playlist/i,
+    });
+    await user.click(removeButton);
+
+    await waitFor(() => {
+      expect(mockRemoveTrackMutate).toHaveBeenCalledTimes(1);
+    });
+    expect(mockRemoveTrackMutate.mock.calls[0]![0]).toEqual({
+      playlistId: "pl-1",
+      trackId: "g2",
+    });
+  });
+
+  it("still shows the × button on SAVED playlists", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "SAVED",
+        spotifyPlaylistId: "sp-xyz",
+        tracks: [{ id: "g1", name: "Track", artistsDisplay: "Artist" }],
+      }),
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Track");
+    expect(
+      screen.getByRole("button", { name: /remove track from playlist/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render the × button on FAILED playlists", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "FAILED",
+        errorMessage: "boom",
+        tracks: [{ id: "g1", name: "Track", artistsDisplay: "Artist" }],
+      }),
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    // FAILED shows the error UI, not the track list — the button
+    // should not exist anywhere in the document.
+    await screen.findByText(/generation failed/i);
+    expect(
+      screen.queryByRole("button", { name: /remove .* from playlist/i }),
+    ).not.toBeInTheDocument();
   });
 });

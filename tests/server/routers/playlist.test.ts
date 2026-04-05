@@ -3,31 +3,37 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const {
   mockSend,
   mockFindOwnedTrackIds,
+  mockFindByIds,
   mockFindByIdsWithDisplayFields,
   mockCreatePlaceholder,
   mockFindById,
   mockFindByIdWithTracks,
   mockMarkSaved,
   mockDeletePlaylist,
+  mockRemoveTrackRepo,
   mockSetStatus,
   mockFindAllByUserSummary,
   mockGetValidToken,
   mockCreateSpotifyPlaylist,
   mockAddTracksToPlaylist,
+  mockRemoveTracksFromPlaylist,
 } = vi.hoisted(() => ({
   mockSend: vi.fn().mockResolvedValue(undefined),
   mockFindOwnedTrackIds: vi.fn(),
+  mockFindByIds: vi.fn(),
   mockFindByIdsWithDisplayFields: vi.fn(),
   mockCreatePlaceholder: vi.fn(),
   mockFindById: vi.fn(),
   mockFindByIdWithTracks: vi.fn(),
   mockMarkSaved: vi.fn(),
   mockDeletePlaylist: vi.fn(),
+  mockRemoveTrackRepo: vi.fn(),
   mockSetStatus: vi.fn(),
   mockFindAllByUserSummary: vi.fn(),
   mockGetValidToken: vi.fn(),
   mockCreateSpotifyPlaylist: vi.fn(),
   mockAddTracksToPlaylist: vi.fn(),
+  mockRemoveTracksFromPlaylist: vi.fn(),
 }));
 
 vi.mock("@/lib/inngest", () => ({
@@ -37,6 +43,7 @@ vi.mock("@/lib/inngest", () => ({
 vi.mock("@/repositories/track.repository", () => ({
   trackRepository: {
     findOwnedTrackIds: mockFindOwnedTrackIds,
+    findByIds: mockFindByIds,
     findByIdsWithDisplayFields: mockFindByIdsWithDisplayFields,
   },
 }));
@@ -48,6 +55,7 @@ vi.mock("@/repositories/playlist.repository", () => ({
     findByIdWithTracks: mockFindByIdWithTracks,
     markSaved: mockMarkSaved,
     delete: mockDeletePlaylist,
+    removeTrack: mockRemoveTrackRepo,
     setStatus: mockSetStatus,
     findAllByUserSummary: mockFindAllByUserSummary,
   },
@@ -60,6 +68,7 @@ vi.mock("@/lib/spotify-token", () => ({
 vi.mock("@/lib/spotify", () => ({
   createPlaylist: mockCreateSpotifyPlaylist,
   addTracksToPlaylist: mockAddTracksToPlaylist,
+  removeTracksFromPlaylist: mockRemoveTracksFromPlaylist,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -794,5 +803,154 @@ describe("playlistRouter.listByUser", () => {
     const caller = authedCaller();
     const result = await caller.playlist.listByUser();
     expect(result).toEqual([]);
+  });
+});
+
+describe("playlistRouter.removeTrack", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("removes a track from a PENDING playlist without calling Spotify", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        generatedTrackIds: ["g1", "g2", "g3"],
+      }),
+    );
+    mockRemoveTrackRepo.mockResolvedValue(undefined);
+
+    const caller = authedCaller();
+    const result = await caller.playlist.removeTrack({
+      playlistId: "pl-1",
+      trackId: "g2",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(mockRemoveTrackRepo).toHaveBeenCalledWith("pl-1", "g2");
+    // PENDING playlists never touch Spotify.
+    expect(mockGetValidToken).not.toHaveBeenCalled();
+    expect(mockRemoveTracksFromPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("deletes from Spotify first, then the DB, for SAVED playlists", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({
+        status: "SAVED",
+        spotifyPlaylistId: "sp-xyz",
+        generatedTrackIds: ["g1", "g2", "g3"],
+      }),
+    );
+    mockGetValidToken.mockResolvedValue({ accessToken: "token-abc" });
+    mockFindByIds.mockResolvedValue([
+      { id: "g2", spotifyId: "sp-track-g2" },
+    ]);
+    mockRemoveTracksFromPlaylist.mockResolvedValue(undefined);
+    mockRemoveTrackRepo.mockResolvedValue(undefined);
+
+    const caller = authedCaller();
+    await caller.playlist.removeTrack({
+      playlistId: "pl-1",
+      trackId: "g2",
+    });
+
+    expect(mockRemoveTracksFromPlaylist).toHaveBeenCalledWith(
+      "token-abc",
+      "sp-xyz",
+      ["spotify:track:sp-track-g2"],
+    );
+    expect(mockRemoveTrackRepo).toHaveBeenCalledWith("pl-1", "g2");
+
+    // Spotify must be called *before* the DB write so a Spotify
+    // failure short-circuits without mutating the DB.
+    const spotifyCallOrder =
+      mockRemoveTracksFromPlaylist.mock.invocationCallOrder[0]!;
+    const dbCallOrder = mockRemoveTrackRepo.mock.invocationCallOrder[0]!;
+    expect(spotifyCallOrder).toBeLessThan(dbCallOrder);
+  });
+
+  it("does NOT call the DB writer when Spotify delete throws", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({
+        status: "SAVED",
+        spotifyPlaylistId: "sp-xyz",
+        generatedTrackIds: ["g1", "g2"],
+      }),
+    );
+    mockGetValidToken.mockResolvedValue({ accessToken: "token-abc" });
+    mockFindByIds.mockResolvedValue([
+      { id: "g2", spotifyId: "sp-track-g2" },
+    ]);
+    mockRemoveTracksFromPlaylist.mockRejectedValue(
+      new Error("Spotify API error: 503"),
+    );
+
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.removeTrack({
+        playlistId: "pl-1",
+        trackId: "g2",
+      }),
+    ).rejects.toThrow(/spotify/i);
+
+    expect(mockRemoveTrackRepo).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the playlist is not owned by the caller", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({ userId: "someone-else" }),
+    );
+
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.removeTrack({
+        playlistId: "pl-1",
+        trackId: "g1",
+      }),
+    ).rejects.toThrow(/not_found/i);
+    expect(mockRemoveTrackRepo).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the playlist status is GENERATING or FAILED", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({ status: "GENERATING" }),
+    );
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.removeTrack({
+        playlistId: "pl-1",
+        trackId: "g1",
+      }),
+    ).rejects.toThrow(/pending or saved/i);
+
+    mockFindById.mockResolvedValue(makePlaylist({ status: "FAILED" }));
+    await expect(
+      caller.playlist.removeTrack({
+        playlistId: "pl-1",
+        trackId: "g1",
+      }),
+    ).rejects.toThrow(/pending or saved/i);
+
+    expect(mockRemoveTrackRepo).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when the trackId is not in generatedTrackIds", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        generatedTrackIds: ["g1", "g2"],
+      }),
+    );
+
+    const caller = authedCaller();
+    const result = await caller.playlist.removeTrack({
+      playlistId: "pl-1",
+      trackId: "not-in-playlist",
+    });
+
+    expect(result).toEqual({ ok: true });
+    // Neither Spotify nor the repo writer was touched.
+    expect(mockRemoveTracksFromPlaylist).not.toHaveBeenCalled();
+    expect(mockRemoveTrackRepo).not.toHaveBeenCalled();
   });
 });

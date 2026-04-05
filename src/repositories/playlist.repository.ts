@@ -281,6 +281,41 @@ export const playlistRepository = {
       .execute();
   },
 
+  /**
+   * Remove a single track from a playlist's `generatedTrackIds` and
+   * drop its matching entry from `trackScores`. Both arrays are filtered
+   * in a single atomic UPDATE so they can't drift out of alignment.
+   *
+   * `seedSongIds` is intentionally NOT touched. Seed ids are metadata
+   * about how the playlist was generated, not a claim about current
+   * membership. If the user removes a seed and later regenerates, the
+   * seed will reappear (seeds are passed as `requiredTrackIds` at
+   * generation time). That's expected — if the user wants to drop a
+   * seed permanently, they start a new playlist with different seeds.
+   *
+   * Idempotent: removing a track that isn't in the list is a no-op
+   * (PG `array_remove` is happy to do nothing, and the jsonb filter
+   * leaves the array unchanged).
+   */
+  async removeTrack(playlistId: string, trackId: string): Promise<void> {
+    await db
+      .updateTable("playlist")
+      .set({
+        generatedTrackIds: sql`array_remove(generated_track_ids, ${trackId}::text)`,
+        // Filter out the matching score triple via a jsonb subquery.
+        // `elem->>'trackId'` extracts the text value; `!=` keeps every
+        // other element. coalesce handles the NULL / empty-array case.
+        trackScores: sql`(
+          SELECT coalesce(jsonb_agg(elem), '[]'::jsonb)
+          FROM jsonb_array_elements(coalesce(track_scores, '[]'::jsonb)) AS elem
+          WHERE elem->>'trackId' != ${trackId}
+        )`,
+        updatedAt: new Date(),
+      })
+      .where("id", "=", playlistId)
+      .execute();
+  },
+
   async delete(playlistId: string): Promise<void> {
     await db
       .deleteFrom("playlist")
