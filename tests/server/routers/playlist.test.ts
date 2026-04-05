@@ -10,6 +10,7 @@ const {
   mockMarkSaved,
   mockDeletePlaylist,
   mockSetStatus,
+  mockFindAllByUserSummary,
   mockGetValidToken,
   mockCreateSpotifyPlaylist,
   mockAddTracksToPlaylist,
@@ -23,6 +24,7 @@ const {
   mockMarkSaved: vi.fn(),
   mockDeletePlaylist: vi.fn(),
   mockSetStatus: vi.fn(),
+  mockFindAllByUserSummary: vi.fn(),
   mockGetValidToken: vi.fn(),
   mockCreateSpotifyPlaylist: vi.fn(),
   mockAddTracksToPlaylist: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock("@/repositories/playlist.repository", () => ({
     markSaved: mockMarkSaved,
     delete: mockDeletePlaylist,
     setStatus: mockSetStatus,
+    findAllByUserSummary: mockFindAllByUserSummary,
   },
 }));
 
@@ -736,5 +739,48 @@ describe("playlistRouter.topUp", () => {
       caller.playlist.topUp({ playlistId: "pl-1" })
     ).rejects.toThrow();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("playlistRouter.listByUser", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns summaries for the current user", async () => {
+    const summaries = [
+      {
+        id: "p1",
+        vibeName: "Night Drive",
+        vibeDescription: "late",
+        status: "SAVED" as const,
+        spotifyPlaylistId: "sp-x",
+        trackCount: 25,
+        createdAt: new Date("2026-04-02"),
+      },
+      {
+        id: "p2",
+        vibeName: "Morning",
+        vibeDescription: null,
+        status: "PENDING" as const,
+        spotifyPlaylistId: null,
+        trackCount: 18,
+        createdAt: new Date("2026-04-01"),
+      },
+    ];
+    mockFindAllByUserSummary.mockResolvedValue(summaries);
+
+    const caller = authedCaller();
+    const result = await caller.playlist.listByUser();
+
+    expect(mockFindAllByUserSummary).toHaveBeenCalledWith("user-1");
+    expect(result).toEqual(summaries);
+  });
+
+  it("returns an empty array when the user has no playlists", async () => {
+    mockFindAllByUserSummary.mockResolvedValue([]);
+    const caller = authedCaller();
+    const result = await caller.playlist.listByUser();
+    expect(result).toEqual([]);
   });
 });

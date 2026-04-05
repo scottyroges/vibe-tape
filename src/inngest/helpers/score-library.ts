@@ -6,7 +6,7 @@
  * this inside a `step.run` and hand the result to `rankAndFilter`.
  *
  * Extracted so the scoring math can't drift across the three lifecycle
- * operations. See: docs/plans/active/playlist-generation-hybrid.md (PR E).
+ * operations. See: docs/plans/completed/playlist-generation-hybrid.md (PR E).
  */
 
 import {

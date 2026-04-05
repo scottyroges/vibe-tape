@@ -77,6 +77,9 @@ export default function PlaylistDetailPage() {
         queryClient.invalidateQueries({
           queryKey: trpc.playlist.getById.queryKey({ id: playlistId }),
         });
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.listByUser.queryKey(),
+        });
       },
     })
   );
@@ -84,6 +87,9 @@ export default function PlaylistDetailPage() {
   const discardMutation = useMutation(
     trpc.playlist.discard.mutationOptions({
       onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.listByUser.queryKey(),
+        });
         router.push("/dashboard");
       },
     })
@@ -100,6 +106,9 @@ export default function PlaylistDetailPage() {
         queryClient.invalidateQueries({
           queryKey: trpc.playlist.getById.queryKey({ id: playlistId }),
         });
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.listByUser.queryKey(),
+        });
       },
     })
   );
@@ -111,6 +120,9 @@ export default function PlaylistDetailPage() {
         setPollingCapped(false);
         queryClient.invalidateQueries({
           queryKey: trpc.playlist.getById.queryKey({ id: playlistId }),
+        });
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.listByUser.queryKey(),
         });
       },
     })

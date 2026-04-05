@@ -10,7 +10,7 @@
  * No Spotify push happens here — the playlist sits at `PENDING` until
  * the user explicitly clicks Save in the UI.
  *
- * See: docs/plans/active/playlist-generation-hybrid.md (PR E).
+ * See: docs/plans/completed/playlist-generation-hybrid.md (PR E).
  */
 
 import { inngest } from "@/lib/inngest";

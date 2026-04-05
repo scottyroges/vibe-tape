@@ -6,7 +6,7 @@
  * it's a one-shot Spotify write and the user is waiting on the response.
  * Regenerate / top-up / list queries ship in later PRs.
  *
- * See: docs/plans/active/playlist-generation-hybrid.md (PRs E + F).
+ * See: docs/plans/completed/playlist-generation-hybrid.md (PRs E + F).
  */
 
 import { z } from "zod";
@@ -308,6 +308,16 @@ export const playlistRouter = router({
 
       return { playlistId: input.playlistId };
     }),
+
+  /**
+   * Dashboard list view. Returns summary rows for the current user's
+   * playlists, newest first. No track resolution — the card only needs
+   * name, description, status, count, date, and spotifyPlaylistId (for
+   * the Open in Spotify quick action).
+   */
+  listByUser: protectedProcedure.query(async ({ ctx }) => {
+    return playlistRepository.findAllByUserSummary(ctx.userId);
+  }),
 
   /**
    * Delete a non-`SAVED` playlist row. `SAVED` playlists are kept

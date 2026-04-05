@@ -85,3 +85,113 @@
   font-size: 0.875rem;
   color: var(--color-destructive);
 }
+
+.tapeList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tapeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+}
+
+.tapeCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tapeCardBody:hover .tapeName {
+  color: var(--color-primary);
+}
+
+.tapeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tapeName {
+  font-size: 1rem;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+
+.tapeDescription {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.tapeMeta {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.statusBadge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.statusBadge[data-status="SAVED"] {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.statusBadge[data-status="FAILED"] {
+  background: var(--color-destructive, #e53e3e);
+  color: #fff;
+}
+
+.tapeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.tapeActionButton {
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--color-foreground);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tapeActionButton:hover:not(:disabled) {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tapeActionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -6,7 +6,7 @@
  * against both, blend to a `finalScore`, and hand the resulting
  * `ScoredTrack[]` to `rankAndFilter`.
  *
- * See: docs/plans/active/playlist-generation-hybrid.md (PR A).
+ * See: docs/plans/completed/playlist-generation-hybrid.md (PR A).
  */
 
 import { MAX_GENRES, MAX_TAGS, type VibeProfile } from "@/lib/vibe-profile";

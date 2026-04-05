@@ -62,6 +62,9 @@ vi.mock("@/lib/trpc/client", () => ({
           onSuccess: opts?.onSuccess,
         }),
       },
+      listByUser: {
+        queryKey: () => ["playlist", "listByUser"],
+      },
     },
   }),
 }));

@@ -3,10 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const { mockMutate, mockSyncStatusFn, mockCountFn } = vi.hoisted(() => ({
+const {
+  mockMutate,
+  mockSyncStatusFn,
+  mockCountFn,
+  mockListPlaylistsFn,
+  mockRegenerateFn,
+  mockTopUpFn,
+  mockDiscardFn,
+} = vi.hoisted(() => ({
   mockMutate: vi.fn(),
   mockSyncStatusFn: vi.fn(),
   mockCountFn: vi.fn(),
+  mockListPlaylistsFn: vi.fn(),
+  mockRegenerateFn: vi.fn(),
+  mockTopUpFn: vi.fn(),
+  mockDiscardFn: vi.fn(),
 }));
 
 // Mock useTRPC to return objects compatible with useQuery/useMutation
@@ -34,6 +46,33 @@ vi.mock("@/lib/trpc/client", () => ({
         }),
       },
     },
+    playlist: {
+      listByUser: {
+        queryOptions: () => ({
+          queryKey: ["playlist", "listByUser"],
+          queryFn: mockListPlaylistsFn,
+        }),
+        queryKey: () => ["playlist", "listByUser"],
+      },
+      regenerate: {
+        mutationOptions: (opts?: { onSuccess?: () => void }) => ({
+          mutationFn: mockRegenerateFn,
+          onSuccess: opts?.onSuccess,
+        }),
+      },
+      topUp: {
+        mutationOptions: (opts?: { onSuccess?: () => void }) => ({
+          mutationFn: mockTopUpFn,
+          onSuccess: opts?.onSuccess,
+        }),
+      },
+      discard: {
+        mutationOptions: (opts?: { onSuccess?: () => void }) => ({
+          mutationFn: mockDiscardFn,
+          onSuccess: opts?.onSuccess,
+        }),
+      },
+    },
   }),
 }));
 
@@ -54,6 +93,10 @@ describe("DashboardPage", () => {
     mockMutate.mockResolvedValue({ status: "started" });
     mockSyncStatusFn.mockResolvedValue({ status: "IDLE" });
     mockCountFn.mockResolvedValue({ count: 42 });
+    mockListPlaylistsFn.mockResolvedValue([]);
+    mockRegenerateFn.mockResolvedValue({ playlistId: "p1" });
+    mockTopUpFn.mockResolvedValue({ playlistId: "p1" });
+    mockDiscardFn.mockResolvedValue({ ok: true });
   });
 
   it("renders the dashboard heading", () => {
@@ -148,9 +191,198 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("heading", { name: /your vibe tapes/i })).toBeInTheDocument();
   });
 
-  it("renders empty state when no vibe tapes exist", () => {
+  it("renders empty state when no vibe tapes exist", async () => {
     renderWithClient(<DashboardPage />);
-    expect(screen.getByText(/no vibe tapes yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no vibe tapes yet/i)).toBeInTheDocument();
+  });
+
+  describe("Your Vibe Tapes list", () => {
+    const basePlaylist = {
+      id: "p1",
+      vibeName: "Night Drive",
+      vibeDescription: "late, humming",
+      status: "PENDING" as const,
+      spotifyPlaylistId: null,
+      trackCount: 18,
+      createdAt: new Date("2026-04-02").toISOString(),
+    };
+
+    it("renders a card per playlist with name, description, track count, and status badge", async () => {
+      mockListPlaylistsFn.mockResolvedValue([
+        basePlaylist,
+        {
+          ...basePlaylist,
+          id: "p2",
+          vibeName: "Saved Mix",
+          vibeDescription: "chill afternoon",
+          status: "SAVED",
+          spotifyPlaylistId: "sp-xyz",
+          trackCount: 1,
+        },
+      ]);
+
+      renderWithClient(<DashboardPage />);
+
+      expect(await screen.findByText("Night Drive")).toBeInTheDocument();
+      expect(screen.getByText("late, humming")).toBeInTheDocument();
+      expect(screen.getByText("chill afternoon")).toBeInTheDocument();
+      expect(screen.getByText(/18 tracks/)).toBeInTheDocument();
+      expect(screen.getByText(/^1 track ·/)).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Status: Pending")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Status: Saved")
+      ).toBeInTheDocument();
+    });
+
+    it("shows Open in Spotify only for SAVED playlists", async () => {
+      mockListPlaylistsFn.mockResolvedValue([
+        basePlaylist, // PENDING
+        {
+          ...basePlaylist,
+          id: "p2",
+          vibeName: "Saved Mix",
+          status: "SAVED",
+          spotifyPlaylistId: "sp-xyz",
+        },
+      ]);
+
+      renderWithClient(<DashboardPage />);
+
+      await screen.findByText("Night Drive");
+      const spotifyLinks = screen.getAllByRole("link", {
+        name: /open in spotify/i,
+      });
+      expect(spotifyLinks).toHaveLength(1);
+      expect(spotifyLinks[0]).toHaveAttribute(
+        "href",
+        "https://open.spotify.com/playlist/sp-xyz"
+      );
+    });
+
+    it("shows Regenerate + Add more for PENDING and SAVED, hides for GENERATING/FAILED", async () => {
+      mockListPlaylistsFn.mockResolvedValue([
+        { ...basePlaylist, id: "p1", status: "PENDING" },
+        {
+          ...basePlaylist,
+          id: "p2",
+          status: "SAVED",
+          spotifyPlaylistId: "sp",
+        },
+        { ...basePlaylist, id: "p3", status: "GENERATING" },
+        { ...basePlaylist, id: "p4", status: "FAILED" },
+      ]);
+
+      renderWithClient(<DashboardPage />);
+
+      await screen.findAllByText("Night Drive");
+      expect(
+        screen.getAllByRole("button", { name: /regenerate/i })
+      ).toHaveLength(2);
+      expect(
+        screen.getAllByRole("button", { name: /add more/i })
+      ).toHaveLength(2);
+    });
+
+    it("hides Discard on SAVED playlists", async () => {
+      mockListPlaylistsFn.mockResolvedValue([
+        { ...basePlaylist, id: "p1", status: "PENDING" },
+        {
+          ...basePlaylist,
+          id: "p2",
+          status: "SAVED",
+          spotifyPlaylistId: "sp",
+        },
+      ]);
+
+      renderWithClient(<DashboardPage />);
+
+      await screen.findAllByText("Night Drive");
+      expect(
+        screen.getAllByRole("button", { name: /discard/i })
+      ).toHaveLength(1);
+    });
+
+    it("invalidates the list query after a regenerate mutation", async () => {
+      mockListPlaylistsFn.mockResolvedValue([basePlaylist]);
+      const user = userEvent.setup();
+      const { queryClient } = renderWithClient(<DashboardPage />);
+
+      await screen.findByText("Night Drive");
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      await user.click(screen.getByRole("button", { name: /regenerate/i }));
+
+      await waitFor(() => {
+        expect(mockRegenerateFn).toHaveBeenCalledWith(
+          { playlistId: "p1" },
+          expect.anything()
+        );
+        expect(invalidateSpy).toHaveBeenCalledWith({
+          queryKey: ["playlist", "listByUser"],
+        });
+      });
+    });
+
+    it("only disables actions on the card whose mutation is in-flight", async () => {
+      mockListPlaylistsFn.mockResolvedValue([
+        { ...basePlaylist, id: "p1", vibeName: "First" },
+        { ...basePlaylist, id: "p2", vibeName: "Second" },
+      ]);
+      // Keep the mutation pending so we can observe the in-flight state.
+      let resolveRegenerate: (v: unknown) => void;
+      mockRegenerateFn.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRegenerate = resolve;
+          })
+      );
+
+      const user = userEvent.setup();
+      renderWithClient(<DashboardPage />);
+
+      await screen.findByText("First");
+
+      // Click Regenerate on the first card.
+      const [firstRegenerate] = screen.getAllByRole("button", {
+        name: /regenerate/i,
+      });
+      await user.click(firstRegenerate!);
+
+      // First card's actions should be disabled; second card's should not.
+      await waitFor(() => {
+        const [first, second] = screen.getAllByRole("button", {
+          name: /regenerate/i,
+        });
+        expect(first!).toBeDisabled();
+        expect(second!).not.toBeDisabled();
+      });
+
+      resolveRegenerate!({ playlistId: "p1" });
+    });
+
+    it("surfaces an error when a mutation fails", async () => {
+      mockListPlaylistsFn.mockResolvedValue([basePlaylist]);
+      mockRegenerateFn.mockRejectedValue(new Error("network down"));
+      const user = userEvent.setup();
+      renderWithClient(<DashboardPage />);
+
+      await screen.findByText("Night Drive");
+      await user.click(screen.getByRole("button", { name: /regenerate/i }));
+
+      expect(
+        await screen.findByText(/couldn't update that playlist/i)
+      ).toBeInTheDocument();
+    });
+
+    it("links each card to /playlist/{id}", async () => {
+      mockListPlaylistsFn.mockResolvedValue([basePlaylist]);
+      renderWithClient(<DashboardPage />);
+
+      const link = await screen.findByRole("link", { name: /night drive/i });
+      expect(link).toHaveAttribute("href", "/playlist/p1");
+    });
   });
 
   it("renders Library section heading", () => {
