@@ -7,11 +7,15 @@ const {
   mockGetByIdFn,
   mockSaveMutate,
   mockDiscardMutate,
+  mockRegenerateMutate,
+  mockTopUpMutate,
   mockRouterPush,
 } = vi.hoisted(() => ({
   mockGetByIdFn: vi.fn(),
   mockSaveMutate: vi.fn(),
   mockDiscardMutate: vi.fn(),
+  mockRegenerateMutate: vi.fn(),
+  mockTopUpMutate: vi.fn(),
   mockRouterPush: vi.fn(),
 }));
 
@@ -43,6 +47,18 @@ vi.mock("@/lib/trpc/client", () => ({
       discard: {
         mutationOptions: (opts?: { onSuccess?: () => void }) => ({
           mutationFn: mockDiscardMutate,
+          onSuccess: opts?.onSuccess,
+        }),
+      },
+      regenerate: {
+        mutationOptions: (opts?: { onSuccess?: () => void }) => ({
+          mutationFn: mockRegenerateMutate,
+          onSuccess: opts?.onSuccess,
+        }),
+      },
+      topUp: {
+        mutationOptions: (opts?: { onSuccess?: () => void }) => ({
+          mutationFn: mockTopUpMutate,
           onSuccess: opts?.onSuccess,
         }),
       },
@@ -134,6 +150,8 @@ describe("PlaylistDetailPage", () => {
     vi.clearAllMocks();
     mockSaveMutate.mockResolvedValue({ spotifyPlaylistId: "sp-xyz" });
     mockDiscardMutate.mockResolvedValue({ ok: true });
+    mockRegenerateMutate.mockResolvedValue({ playlistId: "pl-1" });
+    mockTopUpMutate.mockResolvedValue({ playlistId: "pl-1" });
   });
 
   it("shows the spinner + polling message while GENERATING", async () => {
@@ -154,9 +172,9 @@ describe("PlaylistDetailPage", () => {
     expect(
       screen.getByRole("button", { name: /^discard$/i })
     ).toBeInTheDocument();
-    // Regenerate button is present but disabled (wired in PR G)
+    // Regenerate is wired in PR G and enabled for PENDING playlists.
     const regen = screen.getByRole("button", { name: /regenerate/i });
-    expect(regen).toBeDisabled();
+    expect(regen).toBeEnabled();
   });
 
   it("renders 'You said' when userIntent is set", async () => {
@@ -178,6 +196,32 @@ describe("PlaylistDetailPage", () => {
 
     const vars = mockSaveMutate.mock.calls[0]![0];
     expect(vars).toEqual({ playlistId: "pl-1" });
+  });
+
+  it("fires playlist.regenerate when Regenerate is clicked on a PENDING playlist", async () => {
+    const user = userEvent.setup();
+    mockGetByIdFn.mockResolvedValue(makePlaylist({ status: "PENDING" }));
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByRole("heading", { name: /golden hour/i });
+    await user.click(screen.getByRole("button", { name: /regenerate/i }));
+
+    expect(mockRegenerateMutate.mock.calls[0]![0]).toEqual({
+      playlistId: "pl-1",
+    });
+  });
+
+  it("fires playlist.topUp when Add more is clicked on a SAVED playlist", async () => {
+    const user = userEvent.setup();
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({ status: "SAVED", spotifyPlaylistId: "sp-xyz" })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByRole("link", { name: /open in spotify/i });
+    await user.click(screen.getByRole("button", { name: /add more/i }));
+
+    expect(mockTopUpMutate.mock.calls[0]![0]).toEqual({ playlistId: "pl-1" });
   });
 
   it("fires playlist.discard and redirects to /dashboard", async () => {
@@ -205,9 +249,9 @@ describe("PlaylistDetailPage", () => {
       "href",
       "https://open.spotify.com/playlist/sp-xyz"
     );
-    // "Add more" is present but disabled (wired in PR G)
+    // "Add more" is wired in PR G and enabled for SAVED playlists.
     const addMore = screen.getByRole("button", { name: /add more/i });
-    expect(addMore).toBeDisabled();
+    expect(addMore).toBeEnabled();
     // SAVED playlists should not expose Discard.
     expect(
       screen.queryByRole("button", { name: /^discard$/i })

@@ -1359,9 +1359,34 @@ polling cap unsticks the UI even if the TTL ever misfires.
   `title="Coming soon"` — PR G wires the onClick handlers without
   touching the layout.
 - **PR G — Regenerate + top-up Inngest functions + tRPC mutations.**
-  Extends the detail page with regenerate/top-up actions for `SAVED`
-  playlists. Also handles the Spotify sync via
-  `replacePlaylistTracks` / `addTracksToPlaylist`.
+  Implemented on `feat/playlist-pr-g-regenerate-topup`. Adds
+  `playlist.regenerate` and `playlist.topUp` mutations that validate
+  ownership + status (`PENDING | SAVED`), flip the row to `GENERATING`
+  via a new narrow `playlistRepository.setStatus` writer, and fire
+  `playlist/regenerate.requested` / `playlist/top-up.requested` events
+  carrying `priorStatus`. The two new Inngest functions
+  (`src/inngest/functions/regenerate-playlist.ts`,
+  `src/inngest/functions/top-up-playlist.ts`) share the
+  `scoreLibrary` helper and `computePerArtistCap` (imported from
+  `generate-playlist`) with the generate flow. Regenerate re-scores
+  the library against the stored targets, calls `updateTracks`, and —
+  if the prior status was `SAVED` — pushes the new URIs to Spotify via
+  `replacePlaylistTracks` before restoring status. Top-up scores the
+  library, feeds `rankAndFilter` an `excludeIds` set + an
+  `initialArtistCounts` map built from existing tracks, calls
+  `appendTracks`, and — if `SAVED` — appends only the new URIs via
+  `addTracksToPlaylist`. Both restore `status` to `priorStatus`
+  (`PENDING` or `SAVED`) at the end. Top-up increment formula lives in
+  the exported `computeTopUpExtraMs` helper (25% of target, 10-minute
+  floor). Detail page wires the previously-disabled Regenerate and
+  Add-more buttons through to the new mutations; success handlers
+  invalidate `getById` + reset the poll counter so the existing
+  spinner-while-`GENERATING` path covers the UX. Tests:
+  `tests/inngest/functions/regenerate-playlist.test.ts`,
+  `tests/inngest/functions/top-up-playlist.test.ts`, new blocks in
+  `tests/server/routers/playlist.test.ts`, new `setStatus` assertion
+  in `tests/repositories/playlist.repository.test.ts`, and two new
+  cases in `src/app/(app)/playlist/[id]/page.test.tsx`.
 - **PR H — Dashboard list view.** `playlist.listByUser` + UI. Depends
   on F/G being shipped so the list has interesting statuses and actions
   to render.
