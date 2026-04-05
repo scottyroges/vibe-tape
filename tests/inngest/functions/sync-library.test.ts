@@ -6,8 +6,10 @@ const {
   mockUpsertMany,
   mockTrackFindStale,
   mockTrackFindStaleWithArtists,
+  mockTrackFindStaleVibeProfiles,
   mockTrackUpdateDerivedEra,
   mockTrackUpdateClaudeClassification,
+  mockTrackUpdateVibeProfiles,
   mockTrackSetEnrichmentVersion,
   mockArtistFindStale,
   mockArtistUpdateGenres,
@@ -22,8 +24,10 @@ const {
   mockUpsertMany: vi.fn(),
   mockTrackFindStale: vi.fn(),
   mockTrackFindStaleWithArtists: vi.fn(),
+  mockTrackFindStaleVibeProfiles: vi.fn(),
   mockTrackUpdateDerivedEra: vi.fn(),
   mockTrackUpdateClaudeClassification: vi.fn(),
+  mockTrackUpdateVibeProfiles: vi.fn(),
   mockTrackSetEnrichmentVersion: vi.fn(),
   mockArtistFindStale: vi.fn(),
   mockArtistUpdateGenres: vi.fn(),
@@ -45,6 +49,7 @@ vi.mock("@/lib/spotify", () => ({
 vi.mock("@/lib/enrichment", () => ({
   SPOTIFY_ENRICHMENT_VERSION: 1,
   CLAUDE_ENRICHMENT_VERSION: 1,
+  VIBE_DERIVATION_VERSION: 1,
   SPOTIFY_EXTENDED_QUOTA: false,
   deriveEra: (date: string | null) => {
     if (!date) return null;
@@ -67,8 +72,10 @@ vi.mock("@/repositories/track.repository", () => ({
     upsertMany: mockUpsertMany,
     findStale: mockTrackFindStale,
     findStaleWithArtists: mockTrackFindStaleWithArtists,
+    findStaleVibeProfiles: mockTrackFindStaleVibeProfiles,
     updateDerivedEra: mockTrackUpdateDerivedEra,
     updateClaudeClassification: mockTrackUpdateClaudeClassification,
+    updateVibeProfiles: mockTrackUpdateVibeProfiles,
     setEnrichmentVersion: mockTrackSetEnrichmentVersion,
   },
 }));
@@ -136,8 +143,10 @@ function setupDefaultMocks() {
   mockArtistSetEnrichmentVersion.mockResolvedValue(0);
   mockTrackFindStale.mockResolvedValue([]);
   mockTrackFindStaleWithArtists.mockResolvedValue([]);
+  mockTrackFindStaleVibeProfiles.mockResolvedValue([]);
   mockTrackUpdateDerivedEra.mockResolvedValue(undefined);
   mockTrackUpdateClaudeClassification.mockResolvedValue(undefined);
+  mockTrackUpdateVibeProfiles.mockResolvedValue(undefined);
   mockTrackSetEnrichmentVersion.mockResolvedValue(0);
   mockBuildClassifyPrompt.mockReturnValue({ system: "sys", user: "usr" });
   mockClassifyTracks.mockResolvedValue({ results: [], inputTokens: 0, outputTokens: 0 });
@@ -171,6 +180,7 @@ describe("syncLibrary", () => {
       "upsert-data-0",
       "enrich-tracks/era-0",
       "enrich-tracks/claude-classify-0",
+      "derive-vibe-profile-0",
       "update-status",
     ]);
 
@@ -340,6 +350,59 @@ describe("syncLibrary", () => {
     );
     expect(stepNames).toContain("enrich-tracks/claude-classify-0");
     expect(stepNames).toContain("enrich-tracks/claude-classify-500");
+  });
+
+  it("derives vibe profiles for stale tracks before update-status", async () => {
+    mockTrackFindStaleVibeProfiles.mockResolvedValueOnce([
+      {
+        id: "t1",
+        artistNames: ["Radiohead"],
+        claude: {
+          mood: "melancholic",
+          energy: "low",
+          danceability: "low",
+          vibeTags: ["late-night"],
+        },
+        trackSpotify: { derivedEra: "1990s" },
+        trackLastfm: null,
+        artistLastfmTags: [],
+      },
+    ]);
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    expect(mockTrackFindStaleVibeProfiles).toHaveBeenCalled();
+    expect(mockTrackUpdateVibeProfiles).toHaveBeenCalledTimes(1);
+    const updates = mockTrackUpdateVibeProfiles.mock.calls[0]![0];
+    expect(updates).toHaveLength(1);
+    expect(updates[0].id).toBe("t1");
+    expect(updates[0].mood).toBe("melancholic");
+    // 1990s from Spotify → 80s? No, 1990s → 90s via synonym map
+    expect(updates[0].tags).toContain("90s");
+  });
+
+  it("chunks vibe derivation at 500-track boundary", async () => {
+    const staleVibes = Array.from({ length: 500 }, (_, i) => ({
+      id: `t${i}`,
+      artistNames: ["Artist"],
+      claude: null,
+      trackSpotify: null,
+      trackLastfm: null,
+      artistLastfmTags: [],
+    }));
+    mockTrackFindStaleVibeProfiles
+      .mockResolvedValueOnce(staleVibes)
+      .mockResolvedValueOnce([]);
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    const stepNames = step.run.mock.calls.map(
+      (call: unknown[]) => call[0]
+    );
+    expect(stepNames).toContain("derive-vibe-profile-0");
+    expect(stepNames).toContain("derive-vibe-profile-500");
   });
 
   it("sends enrichment/lastfm.requested event after sync", async () => {
