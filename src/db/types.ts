@@ -4,7 +4,7 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   : ColumnType<T, T | undefined, T>;
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
-import type { UserTier, SyncStatus } from "./enums";
+import type { UserTier, SyncStatus, PlaylistStatus } from "./enums";
 
 export type Account = {
     id: string;
@@ -54,6 +54,13 @@ export type Playlist = {
     vibeName: string;
     vibeDescription: string | null;
     seedSongIds: string[];
+    status: Generated<PlaylistStatus>;
+    generatedTrackIds: Generated<string[]>;
+    targetDurationMinutes: Generated<number>;
+    userIntent: string | null;
+    claudeTarget: unknown | null;
+    mathTarget: unknown | null;
+    errorMessage: string | null;
     artImageUrl: string | null;
     lastSyncedAt: Timestamp | null;
     createdAt: Generated<Timestamp>;

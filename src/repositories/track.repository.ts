@@ -1,7 +1,12 @@
 import { db } from "@/lib/db";
 import { sql } from "kysely";
 import { createId } from "@/lib/id";
-import type { Track, TrackWithLikedAt } from "@/domain/types";
+import type {
+  Track,
+  TrackWithLikedAt,
+  TrackWithScoringFields,
+  TrackWithDisplayFields,
+} from "@/domain/types";
 import type { SpotifyLikedSong } from "@/lib/spotify";
 import {
   SPOTIFY_ENRICHMENT_VERSION,
@@ -61,6 +66,90 @@ export const trackRepository = {
       .where("id", "in", ids)
       .selectAll()
       .execute();
+  },
+
+  /**
+   * Returns the given tracks shaped for the scoring pipeline: vibe fields
+   * (already on `track`) + primary artist id (for per-artist cap) +
+   * duration (for duration-based truncation). Single query joining
+   * `track_artist WHERE position = 0` and `track_spotify_enrichment`.
+   */
+  async findByIdsWithScoringFields(
+    ids: string[]
+  ): Promise<TrackWithScoringFields[]> {
+    if (ids.length === 0) return [];
+    const rows = await db
+      .selectFrom("track")
+      .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
+      .leftJoin(
+        "trackSpotifyEnrichment",
+        "trackSpotifyEnrichment.trackId",
+        "track.id"
+      )
+      .where("track.id", "in", ids)
+      .where("trackArtist.position", "=", 0)
+      .selectAll("track")
+      .select("trackArtist.artistId as primaryArtistId")
+      .select("trackSpotifyEnrichment.durationMs as durationMs")
+      .execute();
+
+    return rows as TrackWithScoringFields[];
+  },
+
+  /**
+   * Returns every track in the user's liked library shaped for scoring.
+   * Used by the generate/regenerate/top-up Inngest functions as the
+   * candidate pool.
+   */
+  async findAllWithScoringFieldsByUser(
+    userId: string
+  ): Promise<TrackWithScoringFields[]> {
+    const rows = await db
+      .selectFrom("track")
+      .innerJoin("likedSong", "likedSong.trackId", "track.id")
+      .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
+      .leftJoin(
+        "trackSpotifyEnrichment",
+        "trackSpotifyEnrichment.trackId",
+        "track.id"
+      )
+      .where("likedSong.userId", "=", userId)
+      .where("trackArtist.position", "=", 0)
+      .selectAll("track")
+      .select("trackArtist.artistId as primaryArtistId")
+      .select("trackSpotifyEnrichment.durationMs as durationMs")
+      .execute();
+
+    return rows as TrackWithScoringFields[];
+  },
+
+  /**
+   * Returns tracks shaped for UI rendering: Track + a display-ready
+   * `artistsDisplay` string (comma-joined list of all artists in
+   * `track_artist.position` order, via `string_agg`, matching the
+   * `findByUserId` pattern). Used by the playlist detail page to render
+   * seeds and generated tracks without N+1 artist lookups, and keeps
+   * "feat." artists in the rendered string.
+   */
+  async findByIdsWithDisplayFields(
+    ids: string[]
+  ): Promise<TrackWithDisplayFields[]> {
+    if (ids.length === 0) return [];
+    const rows = await db
+      .selectFrom("track")
+      .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
+      .innerJoin("artist", "artist.id", "trackArtist.artistId")
+      .where("track.id", "in", ids)
+      .selectAll("track")
+      .select(
+        sql<string>`string_agg(artist.name, ', ' order by track_artist.position)`.as(
+          "artistsDisplay"
+        )
+      )
+      .groupBy("track.id")
+      .execute();
+
+    return rows as TrackWithDisplayFields[];
   },
 
   async findStale(

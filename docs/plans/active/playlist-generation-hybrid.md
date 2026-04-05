@@ -1022,6 +1022,15 @@ async ({ event, step }) => {
 
 ## Repository changes
 
+> **PR C status:** implemented on `feat/playlist-pr-c-schema-repositories`.
+> The sketch below was the design; the code is now the source of truth.
+> Two intentional drifts from this sketch landed in PR C:
+> (1) `TrackWithDisplayFields` exposes `artistsDisplay: string` — a
+> `string_agg` of **all** artists in `track_artist.position` order —
+> instead of `primaryArtistName`, so "feat." artists are preserved
+> for rendering; (2) `PlaylistStatus` is imported from `@/db/enums`,
+> not `@/db/types` (prisma-kysely emits value+type from the enums file).
+
 ### New domain types
 
 Two new types in `src/domain/song.ts`, both extending the base `Track`:
@@ -1273,10 +1282,30 @@ polling cap unsticks the UI even if the TTL ever misfires.
   `classifyTracks`. Tests at `tests/lib/prompts/canonical-mood.test.ts`
   and `tests/lib/prompts/generate-playlist-criteria.test.ts`. No
   schema, Inngest, tRPC, or UI yet.
-- **PR C — Schema + repositories.** Prisma migration adding `status`
-  enum, `generatedTrackIds`, `targetDurationMinutes`, `claudeTarget`,
-  `mathTarget`, `errorMessage`. New `playlistRepository` + new track
-  repository methods.
+- **PR C — Schema + repositories.** Implemented on branch
+  `feat/playlist-pr-c-schema-repositories` (not yet merged). Prisma
+  migration adds the `PlaylistStatus` enum (`GENERATING` / `PENDING` /
+  `SAVED` / `FAILED`) and the recipe columns (`generatedTrackIds`,
+  `targetDurationMinutes`, `userIntent`, `claudeTarget`, `mathTarget`,
+  `errorMessage`) on `playlist`. Domain adds `TrackWithScoringFields`
+  and `TrackWithDisplayFields` as the two shapes the downstream PRs
+  will consume. `trackRepository` gains `findByIdsWithScoringFields`,
+  `findAllWithScoringFieldsByUser` (candidate-pool loader for the
+  Inngest functions), and `findByIdsWithDisplayFields` (UI shape, uses
+  `string_agg` to collapse all artists in `track_artist.position`
+  order). `playlistRepository` is rewritten with full CRUD plus
+  lifecycle methods (`createPlaceholder`, `completeGeneration`,
+  `updateTracks`, `appendTracks`, `markSaved`, `setFailed`, `delete`,
+  `findByIdWithRecipe`, `findByIdWithTracks`, `findAllByUserSummary`);
+  `markSaved` is the **sole writer** of the
+  `status ↔ spotifyPlaylistId` invariant. `findAllByUserSummary`
+  returns a lightweight `PlaylistSummary` and uses PG `array_length`
+  so the dashboard listing doesn't pull every `generatedTrackIds`
+  array over the wire. Tests in
+  `tests/repositories/playlist.repository.test.ts` and
+  `tests/repositories/track.repository.test.ts`; `tests/helpers/mock-db.ts`
+  gains `set` / `values` spies so repo tests can assert UPDATE/INSERT
+  payloads.
 - **PR D — Spotify API client for playlist ops.** `createPlaylist`,
   `addTracksToPlaylist`, `replacePlaylistTracks` helpers, with tests
   mocking fetch.

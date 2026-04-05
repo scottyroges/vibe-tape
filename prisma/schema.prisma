@@ -96,6 +96,13 @@ enum SyncStatus {
   FAILED
 }
 
+enum PlaylistStatus {
+  GENERATING
+  PENDING
+  SAVED
+  FAILED
+}
+
 model Track {
   id                  String        @id @default(cuid())
   spotifyId           String        @unique @map("spotify_id")
@@ -216,17 +223,24 @@ model LikedSong {
 }
 
 model Playlist {
-  id                String    @id @default(cuid())
-  userId            String    @map("user_id")
-  spotifyPlaylistId String?   @map("spotify_playlist_id")
-  vibeName          String    @map("vibe_name")
-  vibeDescription   String?   @map("vibe_description")
-  seedSongIds       String[]  @map("seed_song_ids")
-  artImageUrl       String?   @map("art_image_url")
-  lastSyncedAt      DateTime? @map("last_synced_at")
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  id                    String         @id @default(cuid())
+  userId                String         @map("user_id")
+  spotifyPlaylistId     String?        @map("spotify_playlist_id")
+  vibeName              String         @map("vibe_name")
+  vibeDescription       String?        @map("vibe_description")
+  seedSongIds           String[]       @map("seed_song_ids")
+  status                PlaylistStatus @default(GENERATING)
+  generatedTrackIds     String[]       @default([]) @map("generated_track_ids")
+  targetDurationMinutes Int            @default(60) @map("target_duration_minutes")
+  userIntent            String?        @map("user_intent")
+  claudeTarget          Json?          @map("claude_target")
+  mathTarget            Json?          @map("math_target")
+  errorMessage          String?        @map("error_message")
+  artImageUrl           String?        @map("art_image_url")
+  lastSyncedAt          DateTime?      @map("last_synced_at")
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
 
   @@index([userId])
   @@map("playlist")
