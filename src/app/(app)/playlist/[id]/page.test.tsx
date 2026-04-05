@@ -369,7 +369,7 @@ describe("PlaylistDetailPage", () => {
     }
   });
 
-  it("renders seeds and generated track counts", async () => {
+  it("renders generated track list with the total count", async () => {
     mockGetByIdFn.mockResolvedValue(
       makePlaylist({
         status: "PENDING",
@@ -377,7 +377,11 @@ describe("PlaylistDetailPage", () => {
           { id: "g1", name: "Gen One", artistsDisplay: "A1" },
           { id: "g2", name: "Gen Two", artistsDisplay: "A2" },
         ],
-        seeds: [{ id: "s1", name: "Seed One", artistsDisplay: "A3" }],
+        // Seeds are guaranteed to also be in `generatedTrackIds` at
+        // generation time, so the test mirrors that: the seed id is
+        // present in both arrays. The Seed badge assertion lives in
+        // its own test below.
+        seeds: [{ id: "g1", name: "Gen One", artistsDisplay: "A1" }],
       })
     );
     renderWithClient(<PlaylistDetailPage />);
@@ -386,7 +390,59 @@ describe("PlaylistDetailPage", () => {
     expect(screen.getByText(/tracks \(2\)/i)).toBeInTheDocument();
     expect(screen.getByText("Gen One")).toBeInTheDocument();
     expect(screen.getByText("Gen Two")).toBeInTheDocument();
-    expect(screen.getByText("Seed One")).toBeInTheDocument();
+  });
+
+  it("marks seed tracks inline with a Seed badge and omits the badge elsewhere", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        tracks: [
+          { id: "g1", name: "Gen One", artistsDisplay: "A1" },
+          { id: "g2", name: "Gen Two", artistsDisplay: "A2" },
+          { id: "g3", name: "Gen Three", artistsDisplay: "A3" },
+        ],
+        // Two of the three tracks are seeds — the helper derives
+        // `seedSongIds` from this list, and the ids overlap with
+        // entries in `tracks` (mirroring the real generation flow
+        // where seeds are passed as `requiredTrackIds`).
+        seeds: [
+          { id: "g1", name: "Gen One", artistsDisplay: "A1" },
+          { id: "g3", name: "Gen Three", artistsDisplay: "A3" },
+        ],
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Gen One");
+
+    // No separate Seeds section/heading should exist anywhere.
+    expect(
+      screen.queryByRole("heading", { name: /^seeds/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/seeds \(\d+\)/i)).not.toBeInTheDocument();
+
+    // Two seed badges render — one per seed track.
+    const seedBadges = screen.getAllByText(/^seed$/i);
+    expect(seedBadges).toHaveLength(2);
+
+    // Each badge sits next to the correct track's name. Walk up from
+    // the badge to its trackInfo container and confirm it's the one
+    // whose title text we expect.
+    const badgeTitles = seedBadges
+      .map((b) => {
+        const trackName = b.closest('[class*="trackName"]');
+        return trackName?.textContent ?? "";
+      })
+      .sort();
+    // Each badge's parent element's textContent is the title + "Seed"
+    // concatenated, so match on substring.
+    expect(badgeTitles[0]).toContain("Gen One");
+    expect(badgeTitles[1]).toContain("Gen Three");
+
+    // The non-seed track ("Gen Two") must NOT have a badge sibling.
+    const genTwo = screen.getByText("Gen Two");
+    const genTwoRow = genTwo.closest('[class*="trackRow"]');
+    expect(genTwoRow?.textContent).not.toContain("Seed");
   });
 
   it("renders per-track score triples on generated tracks", async () => {

@@ -368,6 +368,25 @@
   padding-top: 0.3125rem;
 }
 
+/* Small inline pill on a track row's title when the track is one of
+   the seeds the playlist was built from. Compact so it reads as
+   metadata, not a primary element — just enough to tell the user
+   "this row is one of yours." */
+.seedBadge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-primary);
+  color: var(--color-background);
+  vertical-align: middle;
+}
+
 .spinner {
   width: 40px;
   height: 40px;
