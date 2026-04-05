@@ -139,7 +139,13 @@ const IGNORE: Set<string> = new Set([
   "singer songwriter",
 ]);
 
-const GENRE_VOCAB: Set<string> = new Set([
+/**
+ * Canonical genre vocabulary — the full set of genres used to split
+ * derived tags into the genres vs tags buckets. Also imported by the
+ * playlist-criteria prompt so Claude picks from the exact vocab instead
+ * of improvising creative spellings.
+ */
+export const GENRE_VOCAB: ReadonlySet<string> = new Set([
   // top-level
   "rock",
   "pop",
