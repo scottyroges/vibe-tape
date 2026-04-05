@@ -13,16 +13,18 @@
 
 ## Tier 1 — Core Mechanic (Local)
 
-Still the priority — get the "pick seeds, generate a vibe playlist" loop
-working end to end against the local stack.
+**Status (2026-04-05): end-to-end loop is live.** Pick seeds → confirm
+duration + optional vibe text → Claude + math hybrid scoring → preview
+at `/playlist/[id]` → Save to Spotify → regenerate or top-up from the
+dashboard. Only the shareable card (#6) is still open.
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
 | 1 | Spotify OAuth | Better Auth genericOAuth plugin. Authorization Code flow. Tokens stored in Better Auth's `account` table. | [x] |
 | 2 | Liked songs ingestion + storage | Paginate `GET /me/tracks`. Store per user in DB. Free tier capped at 250 songs. | [x] |
-| 3 | Seed song picker UI | Searchable, mobile-first. Fast scroll through liked library. Highest-leverage UX investment. | [~] |
-| 4 | Vibe analysis via Claude | Send 3–5 seed song names/artists to Claude. Return vibe name + descriptor + scoring criteria as JSON. | [ ] |
-| 5 | Playlist generation | Score stored library against vibe criteria. Push playlist back to Spotify via `POST /me/playlists`. | [ ] |
+| 3 | Seed song picker UI | Searchable, virtualized list at `/create`. Pick 3–5 seeds, continue to confirm page for duration + optional vibe text. | [x] |
+| 4 | Vibe analysis via Claude | Haiku prompt with full mood + genre vocabularies, optional user intent. Returns target profile + vibe name + description. See `src/lib/prompts/generate-playlist-criteria.ts`. | [x] |
+| 5 | Playlist generation | Hybrid Claude + math centroid scoring, duration-based truncation, window shuffle, PENDING→SAVED lifecycle, regenerate + top-up, dashboard list. Plan: `docs/plans/completed/playlist-generation-hybrid.md`. | [x] |
 | 6 | Basic shareable card | Typographic card with vibe name, seed songs, song count. No AI art yet — that's Tier 2. | [ ] |
 
 ---
@@ -49,7 +51,7 @@ The social features that drive word of mouth and create the viral loop.
 - [ ] **Group sessions** — multiple users pool their libraries, each contributes seed songs, shared playlist generated
 - [ ] **Guest passes** — paid users invite non-members into a single session via QR code/link
 - [ ] **Public vibe sharing** — shareable URL with `og:image` card, "generate your own version" CTA for guests
-- [ ] **Vibe re-run** — regenerate same seeds as library grows, show what changed
+- [x] **Vibe re-run** — regenerate + top-up both shipped as part of Tier 1 item #5 (uses stored recipe, re-scores against current library, syncs to live Spotify playlist when already SAVED). "Show what changed" diff view not built.
 
 ---
 
