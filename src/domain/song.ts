@@ -17,6 +17,26 @@ export type Track = {
 
 export type TrackWithLikedAt = Track & { artist: string; likedAt: Date };
 
+/**
+ * Scoring-pipeline shape: Track + primary artist id (for per-artist cap)
+ * and duration (for duration-based truncation). Produced by repository
+ * joins that shape the data for `src/lib/playlist-scoring.ts`.
+ */
+export type TrackWithScoringFields = Track & {
+  primaryArtistId: string;
+  durationMs: number | null;
+};
+
+/**
+ * UI-rendering shape: Track + display-ready artist string (comma-joined
+ * list of all artists in `track_artist.position` order, produced by
+ * PG `string_agg`). Avoids N+1 artist lookups when rendering a
+ * playlist's seeds or generated tracks, and keeps "feat." artists.
+ */
+export type TrackWithDisplayFields = Track & {
+  artistsDisplay: string;
+};
+
 export type LikedSong = {
   id: string;
   userId: string;

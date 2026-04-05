@@ -89,7 +89,7 @@ Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). 
 | `artist_spotify_enrichment` | `artist_id` (PK/FK), `genres`, `version` |
 | `artist_lastfm_enrichment` | `artist_id` (PK/FK), `tags`, `version` |
 | `liked_song` | `id`, `user_id`, `track_id`, `liked_at` |
-| `playlists` | `id`, `user_id`, `spotify_playlist_id`, `vibe_name`, `vibe_description`, `seed_song_ids`, `art_image_url`, `last_synced_at` |
+| `playlist` | `id`, `user_id`, `spotify_playlist_id`, `vibe_name`, `vibe_description`, `seed_song_ids`, `status` (`PlaylistStatus` enum), `generated_track_ids`, `target_duration_minutes`, `user_intent`, `claude_target` (JSONB), `math_target` (JSONB), `error_message`, `art_image_url`, `last_synced_at` |
 | `group_sessions` | `id`, `host_user_id`, `participant_ids`, `seed_song_ids`, `status`, `playlist_id`, `expires_at` | Tier 3 — not in schema yet |
 | `guest_passes` | `id`, `created_by_user_id`, `session_id`, `used_at`, `spotify_id` (null until used) | Tier 3 — not in schema yet |
 

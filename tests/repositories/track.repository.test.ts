@@ -99,6 +99,81 @@ describe("trackRepository", () => {
     });
   });
 
+  describe("findByIdsWithScoringFields", () => {
+    it("joins primary artist + spotify enrichment and returns shaped rows", async () => {
+      const expected = [
+        {
+          id: "t1",
+          spotifyId: "s1",
+          name: "Song 1",
+          primaryArtistId: "a1",
+          durationMs: 210_000,
+        },
+      ];
+      execute.mockResolvedValue(expected);
+
+      const result = await trackRepository.findByIdsWithScoringFields([
+        "t1",
+      ]);
+
+      expect(result).toEqual(expected);
+      expect(selectFrom).toHaveBeenCalledWith("track");
+      expect(where).toHaveBeenCalledWith("trackArtist.position", "=", 0);
+    });
+
+    it("returns empty array for empty input without issuing a query", async () => {
+      const result = await trackRepository.findByIdsWithScoringFields([]);
+
+      expect(result).toEqual([]);
+      expect(selectFrom).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("findAllWithScoringFieldsByUser", () => {
+    it("joins liked_song + primary artist + spotify enrichment", async () => {
+      const expected = [
+        {
+          id: "t1",
+          spotifyId: "s1",
+          primaryArtistId: "a1",
+          durationMs: 180_000,
+        },
+      ];
+      execute.mockResolvedValue(expected);
+
+      const result =
+        await trackRepository.findAllWithScoringFieldsByUser("u1");
+
+      expect(result).toEqual(expected);
+      expect(selectFrom).toHaveBeenCalledWith("track");
+      expect(where).toHaveBeenCalledWith("likedSong.userId", "=", "u1");
+      expect(where).toHaveBeenCalledWith("trackArtist.position", "=", 0);
+    });
+  });
+
+  describe("findByIdsWithDisplayFields", () => {
+    it("returns tracks with artistsDisplay via string_agg over all artists", async () => {
+      const expected = [
+        { id: "t1", spotifyId: "s1", artistsDisplay: "Radiohead, Feat Artist" },
+      ];
+      execute.mockResolvedValue(expected);
+
+      const result = await trackRepository.findByIdsWithDisplayFields([
+        "t1",
+      ]);
+
+      expect(result).toEqual(expected);
+      expect(selectFrom).toHaveBeenCalledWith("track");
+    });
+
+    it("returns empty array for empty input", async () => {
+      const result = await trackRepository.findByIdsWithDisplayFields([]);
+
+      expect(result).toEqual([]);
+      expect(selectFrom).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findStale", () => {
     it("queries tracks with stale spotify enrichment via left join", async () => {
       const expected = [

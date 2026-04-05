@@ -178,6 +178,8 @@ it("finds track by id", async () => {
 });
 ```
 
+`createMockDb` exposes spies for the builder methods that take a payload (`values` for inserts, `set` for updates, `where` for predicates) alongside terminal spies like `execute` / `executeTakeFirst`. Prefer asserting on those payload spies over stringly matching SQL — e.g. for `playlistRepository.markSaved`, assert that `set` was called with `{ spotifyPlaylistId, status: "SAVED", ... }` rather than inspecting the generated SQL. Methods that return the builder for chaining (`selectAll`, `orderBy`, `groupBy`, …) don't need explicit spies because the proxy returns itself.
+
 ### Dynamic Imports After Mocks
 
 Import the module under test AFTER setting up mocks:

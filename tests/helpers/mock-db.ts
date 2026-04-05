@@ -19,6 +19,8 @@ export function createMockDb() {
   const updateTable = vi.fn();
   const deleteFrom = vi.fn();
   const where = vi.fn();
+  const set = vi.fn();
+  const values = vi.fn();
 
   const builder: Record<string, unknown> = {};
 
@@ -63,6 +65,16 @@ export function createMockDb() {
           where(...args);
           return proxy;
         };
+      if (prop === "set")
+        return (...args: unknown[]) => {
+          set(...args);
+          return proxy;
+        };
+      if (prop === "values")
+        return (...args: unknown[]) => {
+          values(...args);
+          return proxy;
+        };
       // Return a function that returns the proxy for chaining
       return () => proxy;
     },
@@ -89,5 +101,9 @@ export function createMockDb() {
     deleteFrom,
     /** Spy for `.where(column, op, value)` */
     where,
+    /** Spy for `.set(obj)` — captures the UPDATE payload */
+    set,
+    /** Spy for `.values(obj)` — captures the INSERT payload */
+    values,
   };
 }

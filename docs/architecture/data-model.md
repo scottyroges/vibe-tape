@@ -13,8 +13,9 @@ User
 │       ├── TrackSpotifyEnrichment (1:1, popularity/duration/era)
 │       ├── TrackClaudeEnrichment (1:1, mood/energy/danceability/vibe tags)
 │       └── TrackLastfmEnrichment (1:1, tags from Last.fm)
-└── Playlist (generated vibe playlists)
-    └── seedSongIds[] (references to Tracks that seeded this playlist)
+└── Playlist (generated vibe playlists; status + full generation recipe on one row)
+    ├── seedSongIds[] (Tracks that seeded this playlist)
+    └── generatedTrackIds[] (Tracks the scoring pipeline picked, in order)
 
 Future:
 ├── GroupSession (multiple users pool libraries)
@@ -81,15 +82,26 @@ Fields:
 - Unique constraint on `(userId, trackId)`.
 
 ### Playlist
-A generated vibe playlist. Links to Spotify via `spotifyPlaylistId`.
+A generated vibe playlist. The row is inserted before generation begins and moves through a small state machine, so both the lifecycle status and the full "recipe" used to build the playlist live on the same row. That lets the user regenerate or top up against the original vibe without re-calling Claude.
 
-Fields:
-- `vibeName` — AI-generated name (e.g., "Late Night Coastal Drive").
-- `vibeDescription` — AI-generated one-line descriptor.
-- `seedSongIds` — Array of Song IDs that seeded this playlist.
-- `spotifyPlaylistId` — The Spotify playlist ID after creation.
+Lifecycle fields:
+- `status` — `PlaylistStatus` enum: `GENERATING` (row inserted, Inngest still building the track list), `PENDING` (generated but not yet pushed to Spotify), `SAVED` (pushed to Spotify, `spotifyPlaylistId` populated), `FAILED` (generation error, `errorMessage` populated).
+- `errorMessage` — Populated when `status = FAILED`. Set by the Inngest `onFailure` handler.
+
+Recipe fields (persisted so regenerate/top-up can re-score without another Claude call):
+- `seedSongIds` — Array of Track IDs that seeded this playlist.
+- `userIntent` — Optional free-text vibe description the user supplied ("rainy Sunday coffee shop").
+- `targetDurationMinutes` — User-specified target length; drives duration-based truncation in the scoring pipeline.
+- `claudeTarget` — JSONB. The semantic target profile Claude produced from seeds + intent.
+- `mathTarget` — JSONB. The math centroid of the seed tracks' own vibe profiles.
+- `generatedTrackIds` — Ordered array of Track IDs that won ranking. Distinct from the Spotify-side track list; the repository is the source of truth and writes through to Spotify via the playlist service.
+
+Display/output fields:
+- `vibeName` — Claude-generated name (e.g., "Late Night Coastal Drive"). Stubbed as "Generating..." during `GENERATING`.
+- `vibeDescription` — Claude-generated one-line descriptor.
+- `spotifyPlaylistId` — Set exclusively by `playlistRepository.markSaved`, which is the sole writer of the `status ↔ spotifyPlaylistId` invariant (status flips to `SAVED` and `spotifyPlaylistId` is populated in the same update).
 - `artImageUrl` — URL to AI-generated art card in R2 (Tier 2).
-- `lastSyncedAt` — Last time this playlist was refreshed against updated library.
+- `lastSyncedAt` — Last time this playlist was refreshed against an updated library.
 
 ### Account (Better Auth)
 Stores Spotify OAuth tokens. Managed by Better Auth's `genericOAuth` plugin.
