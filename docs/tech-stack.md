@@ -27,7 +27,7 @@ service — nothing sits in between.
 | Hosting | Local only (`next dev`) | No production environment. See [ADR 010](decisions/010-personal-use-only.md). |
 | Database | Postgres (Docker Compose) | Local container via `docker compose up`. Schema managed by Prisma, queries via Kysely. |
 | Auth | Better Auth + genericOAuth plugin | Session management + Spotify OAuth. We own token storage separately. |
-| AI — vibe analysis | Claude API (Sonnet + Haiku) | Sonnet for playlist generation. Haiku for track classification (mood, energy, danceability, vibe tags) during enrichment. |
+| AI — vibe analysis | Claude API (Sonnet + Haiku) | Sonnet for playlist generation. Haiku for track classification (mood, energy, danceability, vibe tags) during enrichment. Mood is constrained at the prompt level to an 11-value canonical vocabulary (see `CANONICAL_MOODS` in `src/lib/prompts/classify-tracks.ts`). |
 | Music metadata | Last.fm API | Genre tags via artist/track tag endpoints. Replaces Spotify audio features (removed Nov 2024). |
 | Background jobs | Inngest Dev Server (Docker) | Step functions with retries, run locally. See [ADR 009](decisions/009-async-job-processing.md). |
 | Spotify integration | Raw REST API (no SDK) | Official SDK is poorly maintained and broke in Feb 2026. Direct fetch calls are ~150 lines and we own them fully. |

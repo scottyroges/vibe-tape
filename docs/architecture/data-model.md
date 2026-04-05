@@ -55,7 +55,7 @@ Fields: `spotifyId` (unique), `name`. Source-specific enrichment data lives in s
 Enrichment data is stored in per-source tables rather than as columns on Track/Artist. Each table has its own `version` and `enrichedAt` fields, allowing sources to be re-enriched independently. All use the parent entity's ID as their primary key (1:1 relationship) with `onDelete: Cascade`. Repository methods use upsert (`INSERT ... ON CONFLICT DO UPDATE`) to write enrichment data.
 
 - **TrackSpotifyEnrichment** — `popularity`, `durationMs`, `releaseDate`, `derivedEra` (computed from release date).
-- **TrackClaudeEnrichment** — `mood`, `energy`, `danceability`, `vibeTags`. Classified by Claude Haiku.
+- **TrackClaudeEnrichment** — `mood`, `energy`, `danceability`, `vibeTags`. Classified by Claude Haiku. `mood` is constrained by the prompt to one of 11 canonical values (or null); the vocabulary is defined as `CANONICAL_MOODS` in `src/lib/prompts/classify-tracks.ts` and is the source of truth for both classification and vibe-profile derivation.
 - **TrackLastfmEnrichment** — `tags` array from Last.fm.
 - **ArtistSpotifyEnrichment** — `genres` array from the Spotify artist endpoint.
 - **ArtistLastfmEnrichment** — `tags` array from Last.fm.

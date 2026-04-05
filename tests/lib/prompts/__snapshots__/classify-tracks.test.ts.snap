@@ -3,10 +3,27 @@
 exports[`buildClassifyPrompt > returns a stable system prompt 1`] = `
 "You are a music classification assistant. For each track provided, classify it with:
 
-- mood: a single descriptive word (e.g. "melancholic", "uplifting", "aggressive", "dreamy", "nostalgic")
+- mood: one of the following canonical moods (or null if none fit):
+    uplifting, energetic, aggressive, melancholic, romantic, nostalgic,
+    dark, dreamy, playful, confident, peaceful
 - energy: one of "low", "medium", or "high"
 - danceability: one of "low", "medium", or "high"
 - vibeTags: 2-5 short descriptors (e.g. "late-night", "driving", "workout", "rainy-day", "summer")
+
+Mood guidance:
+- uplifting — joyful, euphoric, triumphant, hopeful, cheerful, spiritual
+- energetic — upbeat, powerful, epic, anthemic, determined
+- aggressive — angry, intense, heavy, edgy, rebellious
+- melancholic — sad, wistful, bittersweet, vulnerable, heartfelt
+- romantic — tender, passionate, sensual, sultry, warm, loving
+- nostalgic — timeless, contemplative, introspective, reflective
+- dark — moody, haunting, mysterious, eerie, ominous
+- dreamy — ethereal, atmospheric, hypnotic, psychedelic, cinematic
+- playful — whimsical, quirky, humorous, carefree
+- confident — cool, boastful, swaggering, funky
+- peaceful — calm, relaxed, mellow, laid-back, chill, tranquil
+
+If a track genuinely doesn't fit any canonical mood, return mood: null. Do not invent new moods.
 
 Respond ONLY with a JSON array of objects in the same order as the input. Each object must have exactly these keys: mood, energy, danceability, vibeTags. No other text.
 

@@ -59,9 +59,16 @@ vi.mock("@/lib/enrichment", () => ({
   },
 }));
 
-vi.mock("@/lib/prompts/classify-tracks", () => ({
-  buildClassifyPrompt: mockBuildClassifyPrompt,
-}));
+vi.mock("@/lib/prompts/classify-tracks", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/prompts/classify-tracks")>();
+  return {
+    // Reuse the real CANONICAL_MOODS array so the validator stays in sync
+    // with the source of truth — no drift if a 12th mood is added.
+    ...actual,
+    buildClassifyPrompt: mockBuildClassifyPrompt,
+  };
+});
 
 vi.mock("@/lib/claude", () => ({
   classifyTracks: mockClassifyTracks,
@@ -322,6 +329,83 @@ describe("syncLibrary", () => {
 
     expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
       { id: "t1", mood: "uplifting", energy: "high", danceability: "medium", vibeTags: ["summer"] },
+      { id: "t2", mood: null, energy: null, danceability: null, vibeTags: [] },
+    ]);
+  });
+
+  it("accepts explicit null mood from Claude v2 as valid classification", async () => {
+    // v2 prompt tells Claude to return mood: null when no canonical mood
+    // fits. The validator should accept null (distinct from rejecting an
+    // off-list string) and write the classification with null mood.
+    mockTrackFindStaleWithArtists.mockResolvedValueOnce([
+      { id: "t1", name: "Song A", artist: "Artist A" },
+    ]);
+
+    mockClassifyTracks.mockResolvedValueOnce({
+      results: [
+        { mood: null, energy: "medium", danceability: "low", vibeTags: ["experimental"] },
+      ],
+      inputTokens: 50,
+      outputTokens: 25,
+    });
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
+      { id: "t1", mood: null, energy: "medium", danceability: "low", vibeTags: ["experimental"] },
+    ]);
+  });
+
+  it("normalizes canonical mood case and whitespace before writing", async () => {
+    // If Claude returns "Uplifting" or " uplifting ", the validator should
+    // accept it and the caller should store the canonical lowercase form.
+    mockTrackFindStaleWithArtists.mockResolvedValueOnce([
+      { id: "t1", name: "Song A", artist: "Artist A" },
+      { id: "t2", name: "Song B", artist: "Artist B" },
+    ]);
+
+    mockClassifyTracks.mockResolvedValueOnce({
+      results: [
+        { mood: "Uplifting", energy: "high", danceability: "high", vibeTags: ["summer"] },
+        { mood: "  peaceful  ", energy: "low", danceability: "low", vibeTags: ["calm"] },
+      ],
+      inputTokens: 50,
+      outputTokens: 25,
+    });
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
+      { id: "t1", mood: "uplifting", energy: "high", danceability: "high", vibeTags: ["summer"] },
+      { id: "t2", mood: "peaceful", energy: "low", danceability: "low", vibeTags: ["calm"] },
+    ]);
+  });
+
+  it("rejects off-list mood strings as invalid (classification falls through to null)", async () => {
+    // Pre-v2 mood words like "joyful" or "soulful" are no longer accepted.
+    // The whole classification is rejected and the track gets all-null
+    // fields.
+    mockTrackFindStaleWithArtists.mockResolvedValueOnce([
+      { id: "t1", name: "Song A", artist: "Artist A" },
+      { id: "t2", name: "Song B", artist: "Artist B" },
+    ]);
+
+    mockClassifyTracks.mockResolvedValueOnce({
+      results: [
+        { mood: "joyful", energy: "high", danceability: "high", vibeTags: ["summer"] }, // off-list
+        { mood: "soulful", energy: "medium", danceability: "medium", vibeTags: ["slow"] }, // off-list
+      ],
+      inputTokens: 50,
+      outputTokens: 25,
+    });
+
+    const step = createMockStep();
+    await handler({ event: { data: { userId: "user-1" } }, step });
+
+    expect(mockTrackUpdateClaudeClassification).toHaveBeenCalledWith([
+      { id: "t1", mood: null, energy: null, danceability: null, vibeTags: [] },
       { id: "t2", mood: null, energy: null, danceability: null, vibeTags: [] },
     ]);
   });

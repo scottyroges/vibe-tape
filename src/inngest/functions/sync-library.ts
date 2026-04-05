@@ -8,7 +8,11 @@ import {
   SPOTIFY_EXTENDED_QUOTA,
   deriveEra,
 } from "@/lib/enrichment";
-import { buildClassifyPrompt } from "@/lib/prompts/classify-tracks";
+import {
+  buildClassifyPrompt,
+  CANONICAL_MOODS,
+  type CanonicalMood,
+} from "@/lib/prompts/classify-tracks";
 import { classifyTracks } from "@/lib/claude";
 import { deriveVibeProfile } from "@/lib/vibe-profile";
 import { trackRepository } from "@/repositories/track.repository";
@@ -23,18 +27,48 @@ const CLAUDE_BATCH_SIZE = 50;
 const VIBE_DERIVATION_CHUNK_SIZE = 500;
 
 const VALID_ENERGY_VALUES = new Set(["low", "medium", "high"]);
+const CANONICAL_MOOD_SET: ReadonlySet<string> = new Set(CANONICAL_MOODS);
+
+/**
+ * Normalize a raw mood value from Claude into a canonical mood or null.
+ *
+ * - `null` stays `null` (Claude's explicit "no canonical fit" signal).
+ * - A string matching a canonical mood (case/whitespace-insensitive) is
+ *   returned in its canonical (lowercase, trimmed) form.
+ * - Anything else — off-list strings, non-strings, empty strings — returns
+ *   `undefined`, which the validator treats as rejection.
+ *
+ * Used by both the validator and the caller that writes to the DB so that
+ * a track with mood `"Uplifting"` from Claude is both accepted AND stored
+ * as the canonical `"uplifting"`.
+ */
+function normalizeClaudeMood(
+  raw: unknown
+): CanonicalMood | null | undefined {
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  const normalized = raw.toLowerCase().trim();
+  return CANONICAL_MOOD_SET.has(normalized)
+    ? (normalized as CanonicalMood)
+    : undefined;
+}
 
 function isValidClassification(c: unknown): c is {
-  mood: string;
+  mood: CanonicalMood | null;
   energy: "low" | "medium" | "high";
   danceability: "low" | "medium" | "high";
   vibeTags: string[];
 } {
   if (!c || typeof c !== "object") return false;
   const obj = c as Record<string, unknown>;
+
+  // Claude v2 prompt constrains mood to the canonical set or null. Any
+  // off-list mood string is rejected — the whole classification falls
+  // through to the null-classification path in the caller.
+  const moodOk = normalizeClaudeMood(obj.mood) !== undefined;
+
   return (
-    typeof obj.mood === "string" &&
-    obj.mood.length > 0 &&
+    moodOk &&
     VALID_ENERGY_VALUES.has(obj.energy as string) &&
     VALID_ENERGY_VALUES.has(obj.danceability as string) &&
     Array.isArray(obj.vibeTags) &&
@@ -211,9 +245,14 @@ export const syncLibrary = inngest.createFunction(
               return batch.map((track, j) => {
                 const classification = j < results.length ? results[j] : null;
                 if (classification && isValidClassification(classification)) {
+                  // Validator passed, so normalizeClaudeMood returns either
+                  // null or a canonical string (never undefined). The `??
+                  // null` is a type-widening no-op.
+                  const normalizedMood =
+                    normalizeClaudeMood(classification.mood) ?? null;
                   return {
                     id: track.id,
-                    mood: classification.mood as string | null,
+                    mood: normalizedMood as string | null,
                     energy: classification.energy as string | null,
                     danceability: classification.danceability as string | null,
                     vibeTags: classification.vibeTags,
