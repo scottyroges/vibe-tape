@@ -109,8 +109,8 @@ All app logic is exposed via tRPC procedures (see [ADR 002](decisions/002-trpc-a
 | Router | Key procedures | Tier |
 |--------|---------------|------|
 | `health` | `ping` | Implemented |
-| `library` | `sync`, `list`, `search` | Tier 1 |
-| `playlist` | `generate`, `list`, `getById`, `refresh` | Tier 1 |
+| `library` | `sync`, `list`, `search` | Tier 1 (partial) |
+| `playlist` | `generate`, `list`, `getById`, `refresh` | Tier 1 (`generate` implemented) |
 | `session` | `create`, `join`, `generate` | Tier 3 |
 
 ---
@@ -153,3 +153,4 @@ The Inngest Dev Server runs as a Docker Compose service alongside Postgres. `doc
 
 - **Library sync** (`sync-library`) — Fetches the user's Spotify liked songs, upserts to database, and runs Spotify + Claude enrichment. Triggered by `library/sync.requested` event with `{ userId }`. Idempotent per user with concurrency limit of 1. After completing, emits `enrichment/lastfm.requested` to trigger Last.fm enrichment asynchronously.
 - **Last.fm enrichment** (`enrich-lastfm`) — Fetches Last.fm tags for artists and tracks with stale or missing enrichment. Runs independently from library sync with global concurrency of 1 (rate-limit friendly). Dual trigger: the `enrichment/lastfm.requested` event (emitted by sync-library) and a daily cron (`0 0 * * *`) set on the Inngest function itself — fires while the Dev Server is running.
+- **Playlist generation** (`generate-playlist`) — Builds a playlist recipe from 3–5 seed tracks using the hybrid Claude + math scoring pipeline. Triggered by `playlist/generate.requested` after the `playlist.generate` tRPC mutation inserts a `GENERATING` placeholder row; the function loads seeds, gets a Claude target + vibe name/description, computes a math centroid target, scores the user's library via the shared `scoreLibrary` helper, ranks/caps/truncates/shuffles, and flips the row to `PENDING`. Concurrency keyed on `playlistId` (limit 1) so retries can't race. `onFailure` marks the row `FAILED`. No Spotify push happens here — that waits for the user to click Save. Regenerate and top-up ship as sibling functions in a later PR. See `docs/plans/active/playlist-generation-hybrid.md`.

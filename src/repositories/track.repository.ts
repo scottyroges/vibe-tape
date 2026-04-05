@@ -59,6 +59,27 @@ export const trackRepository = {
     return rows as TrackWithLikedAt[];
   },
 
+  /**
+   * Returns the subset of the given track IDs that are actually liked
+   * by `userId`, as a `Set` for O(1) membership checks at the call
+   * site. Used by `playlist.generate` to validate seed ownership — any
+   * ID missing from the set means the caller either made one up or is
+   * trying to use somebody else's track.
+   */
+  async findOwnedTrackIds(
+    userId: string,
+    trackIds: string[]
+  ): Promise<Set<string>> {
+    if (trackIds.length === 0) return new Set();
+    const rows = await db
+      .selectFrom("likedSong")
+      .where("userId", "=", userId)
+      .where("trackId", "in", trackIds)
+      .select("trackId")
+      .execute();
+    return new Set(rows.map((r) => r.trackId));
+  },
+
   async findByIds(ids: string[]): Promise<Track[]> {
     if (ids.length === 0) return [];
     return db
