@@ -11,6 +11,20 @@ import type { VibeProfile } from "@/lib/vibe-profile";
 import { trackRepository } from "@/repositories/track.repository";
 
 /**
+ * Build a `::jsonb` literal from a JS value. Exists because
+ * node-postgres otherwise serializes a bare JS `Array` as a PG array
+ * literal (`{…}`), not as JSON — writing an array-of-objects into a
+ * jsonb column via Kysely's `.set({ col: array })` blows up with
+ * `invalid input syntax for type json`. Stringifying ourselves and
+ * casting to `jsonb` sends a single text parameter that Postgres
+ * parses as JSON. Plain objects don't need this — node-postgres
+ * JSON.stringify's those automatically.
+ */
+function jsonbLiteral(value: unknown) {
+  return sql`${JSON.stringify(value)}::jsonb`;
+}
+
+/**
  * Shape returned by `findAllByUserSummary` — list-view summary without
  * resolving tracks. `trackCount` comes from PG `array_length` so we
  * don't pull every `generatedTrackIds` array over the wire.
@@ -134,7 +148,14 @@ export const playlistRepository = {
         claudeTarget: data.claudeTarget as unknown as object,
         mathTarget: data.mathTarget as unknown as object,
         generatedTrackIds: data.generatedTrackIds,
-        trackScores: data.trackScores as unknown as object,
+        // node-postgres treats a bare JS Array as a PG array literal
+        // (`{…}`), not as JSON. That breaks jsonb inserts with errors
+        // like `invalid input syntax for type json`. Wrap in a raw
+        // `sql`${stringified}::jsonb`` fragment so the driver sends a
+        // single text parameter that jsonb can parse. `claudeTarget` /
+        // `mathTarget` are plain objects — node-postgres JSON.stringify's
+        // those for us, so they don't need the same treatment.
+        trackScores: jsonbLiteral(data.trackScores),
         status: "PENDING",
         updatedAt: new Date(),
       })
@@ -156,7 +177,8 @@ export const playlistRepository = {
       .updateTable("playlist")
       .set({
         generatedTrackIds: trackIds,
-        trackScores: trackScores as unknown as object,
+        // See `completeGeneration` for the reasoning on the sql cast.
+        trackScores: jsonbLiteral(trackScores),
         updatedAt: new Date(),
       })
       .where("id", "=", playlistId)
@@ -183,9 +205,11 @@ export const playlistRepository = {
         // `coalesce(track_scores, '[]'::jsonb) || $newScores::jsonb` —
         // append the new score triples to whatever is currently stored,
         // treating NULL as an empty array so legacy rows don't explode.
-        trackScores: sql`coalesce(track_scores, '[]'::jsonb) || ${JSON.stringify(
+        // `jsonbLiteral` is the same helper `completeGeneration` uses;
+        // see its docstring for the node-postgres JSON-array gotcha.
+        trackScores: sql`coalesce(track_scores, '[]'::jsonb) || ${jsonbLiteral(
           trackScores,
-        )}::jsonb`,
+        )}`,
         updatedAt: new Date(),
       })
       .where("id", "=", playlistId)
