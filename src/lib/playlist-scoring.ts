@@ -55,6 +55,13 @@ const ORDINAL_TO_ENERGY = ["low", "medium", "high"] as const;
 
 export type ScoredTrack = {
   trackId: string;
+  /**
+   * Track title as stored on `Track.name`. Used by `rankAndFilter` to
+   * build a normalized dedup key so near-duplicate variants ("Call on
+   * Me", "Call on Me (Radio Edit)", "Call on Me - Radio Mix") collapse
+   * to one entry in the output.
+   */
+  name: string;
   primaryArtistId: string;
   durationMs: number;
   claudeScore: number;
@@ -344,6 +351,58 @@ export function computeFinalScore(
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Dedup — collapse near-duplicate variants of the same song
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reduce a track title to a canonical "core" so that variant releases
+ * of the same song collapse to a single key. Pairs with the track's
+ * `primaryArtistId` to form the full dedup key in `rankAndFilter`.
+ *
+ * Rules (applied in order, all pure):
+ *
+ * 1. Lowercase.
+ * 2. Strip parenthetical / bracketed / brace content — `(Radio Edit)`,
+ *    `[Remastered]`, `{Bonus Track}`.
+ * 3. Strip " - Anything" suffix — dash-separated variant markers like
+ *    ` - Remastered 2011`, ` - Live`, ` - Radio Mix`. Only a dash with
+ *    surrounding whitespace counts, so song titles containing a literal
+ *    hyphen (`Rock-a-Bye`) survive.
+ * 4. Strip trailing `feat./ft./featuring` clauses.
+ * 5. Collapse non-word characters to spaces, then collapse whitespace.
+ *
+ * Edge case: if normalization produces an empty string (rare — title
+ * was entirely parenthetical), fall back to the lowercased original
+ * so distinct tracks don't all collapse into one empty key.
+ *
+ * Deliberately **not** on the list: stripping "remix" as a standalone
+ * word. Remixes are genuinely different tracks — a "Daft Punk Remix"
+ * of a song is a separate artistic work, not a radio variant. If a
+ * user added the original and the remix to their library, keeping
+ * both in the playlist is the right call.
+ */
+export function normalizeTitleForDedup(title: string): string {
+  const original = title.toLowerCase().trim();
+  let s = original;
+  // 2. Parenthetical / bracketed / brace content.
+  s = s.replace(/\([^)]*\)/g, " ");
+  s = s.replace(/\[[^\]]*\]/g, " ");
+  s = s.replace(/\{[^}]*\}/g, " ");
+  // 3. Dash-separated variant suffix.
+  s = s.replace(/\s+-\s+.*$/, "");
+  // 4. Feat./ft./featuring clause (no parens).
+  s = s.replace(/\s+(feat|ft|featuring)\.?\s.*$/i, "");
+  // 5. Punctuation → space, collapse whitespace.
+  s = s.replace(/[^\p{L}\p{N}\s]/gu, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  return s.length > 0 ? s : original;
+}
+
+function dedupKey(track: { primaryArtistId: string; name: string }): string {
+  return `${track.primaryArtistId}::${normalizeTitleForDedup(track.name)}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Rank + filter
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -383,15 +442,33 @@ export function rankAndFilter(
       artistCounts.set(artistId, count);
     }
   }
+  // Seen dedup keys — `primaryArtistId::normalized-title`. Required
+  // tracks (seeds) and any already-existing top-up tracks (via
+  // `excludeIds` + their candidate entries) seed this set so non-
+  // required variants can't collide with them.
+  const seenDedupKeys = new Set<string>();
+  // Pre-seed dedup keys from tracks the top-up flow already has in
+  // the playlist. `excludeIds` drops them from being re-picked, but
+  // we also need their dedup keys in `seen` so new variants of those
+  // same songs don't sneak into the append. Only applies when the
+  // caller provides `excludeIds`.
+  if (excludeIds) {
+    for (const c of candidates) {
+      if (excludeIds.has(c.trackId)) seenDedupKeys.add(dedupKey(c));
+    }
+  }
   let totalDurationMs = 0;
 
-  // 1. Seed `picked` with required tracks (exempt from cap).
+  // 1. Seed `picked` with required tracks (exempt from cap + dedup).
+  //    Required tracks still contribute their dedup key so non-
+  //    required variants get dropped.
   for (const id of requiredTrackIds) {
     const track = byId.get(id);
     if (!track) continue;
     if (pickedIds.has(track.trackId)) continue;
     picked.push(track);
     pickedIds.add(track.trackId);
+    seenDedupKeys.add(dedupKey(track));
     artistCounts.set(
       track.primaryArtistId,
       (artistCounts.get(track.primaryArtistId) ?? 0) + 1,
@@ -408,17 +485,23 @@ export function rankAndFilter(
       return a.trackId < b.trackId ? -1 : a.trackId > b.trackId ? 1 : 0;
     });
 
-  // 3 + 4. Filter, cap, truncate by duration and MAX_PLAYLIST_TRACKS.
+  // 3 + 4. Filter, cap, dedupe, truncate by duration and MAX_PLAYLIST_TRACKS.
+  //    Because `sorted` is in `finalScore` DESC order, first occurrence
+  //    wins naturally — the highest-scoring variant of a song claims
+  //    the dedup key and later variants are skipped.
   for (const track of sorted) {
     if (totalDurationMs >= targetDurationMs) break;
     if (picked.length >= MAX_PLAYLIST_TRACKS) break;
 
     if (excludeIds?.has(track.trackId)) continue;
+    const key = dedupKey(track);
+    if (seenDedupKeys.has(key)) continue;
     const artistCount = artistCounts.get(track.primaryArtistId) ?? 0;
     if (artistCount >= perArtistCap) continue;
 
     picked.push(track);
     pickedIds.add(track.trackId);
+    seenDedupKeys.add(key);
     artistCounts.set(track.primaryArtistId, artistCount + 1);
     totalDurationMs += track.durationMs;
   }
