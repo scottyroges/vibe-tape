@@ -1,12 +1,21 @@
 # Vibe Tape — Tech Stack & Architecture
 
 > *March 2026 — Draft*
+>
+> **Status: Personal use only.** See [ADR 010](decisions/010-personal-use-only.md).
+> Vibe Tape runs locally against Docker Postgres and a local Inngest Dev Server.
+> There is no hosted environment. Sections below describing payments, tiered
+> plans, cost models, or cloud services are kept as historical context from
+> when the project was planned as a product.
 
 ---
 
 ## Guiding Principle
 
-Free for as long as possible. Every infrastructure choice prioritizes free tiers and zero fixed cost until there is real revenue. Complexity is only introduced when it solves a specific problem. We own the parts that are core to the product; we delegate the parts that are commodity.
+Runs entirely on the developer's machine. Docker Compose brings up Postgres
+and the Inngest Dev Server; `next dev` handles the app. External API calls
+(Spotify, Claude, Last.fm) go straight from the laptop to the upstream
+service — nothing sits in between.
 
 ---
 
@@ -14,16 +23,13 @@ Free for as long as possible. Every infrastructure choice prioritizes free tiers
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| Framework | Next.js + TypeScript | App Router, server components, API routes all in one. Same stack as other projects. |
-| Hosting | Vercel | Free tier, built-in cron, deploys on git push. Zero config. |
-| Database | Neon (Postgres) | Free tier handles thousands of users. Serverless, scales to zero. |
+| Framework | Next.js + TypeScript | App Router, server components, API routes all in one. |
+| Hosting | Local only (`next dev`) | No production environment. See [ADR 010](decisions/010-personal-use-only.md). |
+| Database | Postgres (Docker Compose) | Local container via `docker compose up`. Schema managed by Prisma, queries via Kysely. |
 | Auth | Better Auth + genericOAuth plugin | Session management + Spotify OAuth. We own token storage separately. |
-| File storage | Cloudflare R2 | 10GB free. Stores AI-generated art cards and cached images. |
-| Payments | Stripe | Free until you collect money. Per-transaction fee only. |
-| AI — vibe analysis | Claude API (Sonnet + Haiku) | Sonnet for playlist generation (~$0.01–0.02/gen). Haiku for track classification (mood, energy, danceability, vibe tags) during enrichment. |
-| AI — art generation | Stable Diffusion (Replicate) | ~$0.005/image. Deferred to Tier 2. GPT-4o image gen as alternative (~$0.06). |
-| Music metadata | Last.fm API + MusicBrainz | Genre tags, BPM, era data. Free. Replaces Spotify audio features (removed Nov 2024). |
-| Background jobs | Inngest (free tier) | 50k executions/month free. Native Next.js/Vercel integration. Step functions with retries. See [ADR 009](decisions/009-async-job-processing.md). |
+| AI — vibe analysis | Claude API (Sonnet + Haiku) | Sonnet for playlist generation. Haiku for track classification (mood, energy, danceability, vibe tags) during enrichment. |
+| Music metadata | Last.fm API | Genre tags via artist/track tag endpoints. Replaces Spotify audio features (removed Nov 2024). |
+| Background jobs | Inngest Dev Server (Docker) | Step functions with retries, run locally. See [ADR 009](decisions/009-async-job-processing.md). |
 | Spotify integration | Raw REST API (no SDK) | Official SDK is poorly maintained and broke in Feb 2026. Direct fetch calls are ~150 lines and we own them fully. |
 
 ---
@@ -59,7 +65,7 @@ Better Auth's `genericOAuth` plugin handles the OAuth dance and session cookie. 
 - Every Spotify API call goes through a `getValidToken(userId)` helper
 - Helper checks `token_expires_at` against current time
 - If expired: `POST accounts.spotify.com/api/token` with `refresh_token`
-- Store new `access_token` and updated `token_expires_at` back to Neon
+- Store new `access_token` and updated `token_expires_at` back to Postgres
 - If refresh fails with `invalid_grant`: mark user as `needs_reauth`, skip in sync jobs, prompt on next login
 
 ### Local development note
@@ -128,13 +134,16 @@ This is the core product logic. Runs on every playlist generation request.
 
 ## Background Processing
 
-Background jobs run via **Inngest** — a managed job queue that integrates natively with Next.js on Vercel. Jobs are defined as step functions where each step is independently retryable. See [ADR 009](decisions/009-async-job-processing.md) for the full decision and migration path.
+Background jobs run via **Inngest**. Jobs are defined as step functions where each step is independently retryable. See [ADR 009](decisions/009-async-job-processing.md) for the full decision.
 
 ### How it works
 
-The Inngest SDK exposes a serve handler at `/api/inngest`. The Inngest server (cloud in production, Docker container in local dev) discovers registered functions via this endpoint and invokes them by sending HTTP requests back to it. Functions are defined in `src/inngest/functions/` and registered in the serve handler.
-
-In production, requests to `/api/inngest` are authenticated via request signing (`INNGEST_SIGNING_KEY`). In local dev (`INNGEST_DEV=1`), signature verification is disabled.
+The Inngest SDK exposes a serve handler at `/api/inngest`. The Inngest Dev
+Server (a Docker Compose container) discovers registered functions via this
+endpoint and invokes them by sending HTTP requests back to it. Functions are
+defined in `src/inngest/functions/` and registered in the serve handler.
+With `INNGEST_DEV=1` set in `.env`, signature verification is disabled so the
+Dev Server can reach the endpoint without signing keys.
 
 ### Local development
 
@@ -142,23 +151,5 @@ The Inngest Dev Server runs as a Docker Compose service alongside Postgres. `doc
 
 ### Jobs
 
-- **Library sync** (`sync-library`) — Fetches a user's Spotify liked songs, upserts to database, and runs Spotify + Claude enrichment. Triggered by `library/sync.requested` event with `{ userId }`. Idempotent per user with concurrency limit of 1. After completing, emits `enrichment/lastfm.requested` to trigger Last.fm enrichment asynchronously.
-- **Last.fm enrichment** (`enrich-lastfm`) — Fetches Last.fm tags for artists and tracks with stale or missing enrichment. Runs independently from library sync with global concurrency of 1 (rate-limit friendly). Dual trigger: the `enrichment/lastfm.requested` event (emitted by sync-library) and a daily cron (`0 0 * * *`) to catch up on any missed enrichment.
-- **Nightly auto-sync** (future) — batch-refresh all users' libraries on a schedule via Vercel cron triggering an Inngest event.
-- **AI art generation** (Tier 2+) — generate vibe card art async after playlist creation. Cache in R2.
-
----
-
-## Cost Model
-
-| Cost item | Unit cost | ~300 users/mo | Free tier |
-|-----------|-----------|---------------|-----------|
-| Claude (vibe analysis) | ~$0.015/gen | ~$9/mo | N/A |
-| SD image generation | ~$0.005/image | ~$3/mo | Skip for free users |
-| Inngest (background jobs) | — | $0 | Free 50k executions/mo |
-| Vercel hosting | — | $0 (hobby tier) | Free |
-| Neon database | — | $0 (free tier) | Free |
-| Cloudflare R2 | — | < $1/mo | Free 10GB |
-| Last.fm API | — | $0 | Free |
-
-**Total variable cost at 300 users: ~$12–15/month against ~$250/month revenue.**
+- **Library sync** (`sync-library`) — Fetches the user's Spotify liked songs, upserts to database, and runs Spotify + Claude enrichment. Triggered by `library/sync.requested` event with `{ userId }`. Idempotent per user with concurrency limit of 1. After completing, emits `enrichment/lastfm.requested` to trigger Last.fm enrichment asynchronously.
+- **Last.fm enrichment** (`enrich-lastfm`) — Fetches Last.fm tags for artists and tracks with stale or missing enrichment. Runs independently from library sync with global concurrency of 1 (rate-limit friendly). Dual trigger: the `enrichment/lastfm.requested` event (emitted by sync-library) and a daily cron (`0 0 * * *`) set on the Inngest function itself — fires while the Dev Server is running.

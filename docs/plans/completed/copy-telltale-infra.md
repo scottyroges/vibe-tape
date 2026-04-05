@@ -1,5 +1,9 @@
 # Copy Reusable Infrastructure from Telltale to Vibe Tape
 
+> **Historical note (2026-04-04):** References to Neon's pooled + direct
+> connection URLs are stale — Vibe Tape now runs against a local Docker
+> Postgres only. See [ADR 010](../../decisions/010-personal-use-only.md).
+
 **Status:** Complete
 **Created:** 2026-03-20
 **Goal:** Bootstrap Vibe Tape's project scaffolding by copying and adapting infrastructure from Telltale — auth, database, tRPC, testing, config, and frontend/backend structure — so we start with proven patterns instead of rebuilding from scratch.

@@ -1,5 +1,10 @@
 # Documentation Index
 
+> **Status: Personal use only.** Vibe Tape cannot be released publicly — Spotify
+> caps dev-mode apps at 25 users and requires 250k MAU for extended quota. See
+> [ADR 010](decisions/010-personal-use-only.md). Docs that still mention Vercel,
+> Neon, or production infrastructure are historical context unless noted.
+
 ## Quick Reference
 
 - **Product vision:** .personal/docs/vision.md
@@ -20,11 +25,11 @@
 - **002 tRPC API layer:** .personal/docs/decisions/002-trpc-api-layer.md
 - **003 Better Auth:** .personal/docs/decisions/003-better-auth.md
 - **004 CSS Modules:** .personal/docs/decisions/004-css-modules.md
-- **005 Vercel hosting:** .personal/docs/decisions/005-vercel-hosting.md
 - **006 Testing strategy:** .personal/docs/decisions/006-testing-strategy.md
 - **007 Turbopack dev only:** .personal/docs/decisions/007-turbopack-dev-only.md
 - **008 Prisma + Kysely:** .personal/docs/decisions/008-query-layer-prisma-kysely.md
 - **009 Async job processing:** .personal/docs/decisions/009-async-job-processing.md
+- **010 Personal use only:** .personal/docs/decisions/010-personal-use-only.md
 
 ## Notes
 

@@ -14,7 +14,6 @@ if (!process.env.SPOTIFY_CLIENT_SECRET) {
 
 function getBaseUrl(): string {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://127.0.0.1:3000";
 }
 

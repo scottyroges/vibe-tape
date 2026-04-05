@@ -1,16 +1,24 @@
 # Vibe Tape — Product Roadmap
 
 > *March 2026 — Draft*
+>
+> **Status: Personal use only.** Spotify caps dev-mode apps at 25 users and
+> requires 250k MAU for extended quota, so Vibe Tape will never ship publicly
+> — see [ADR 010](decisions/010-personal-use-only.md). The tiers, payments,
+> distribution strategy, and "users per month" framing below are kept as
+> historical record from the original product plan. Treat everything past
+> Tier 1 as a wishlist of things that would be fun to build locally.
 
 ---
 
-## Tier 1 — MVP (Ship Nothing Without These)
+## Tier 1 — Core Mechanic (Local)
 
-The absolute minimum to validate the core mechanic. Goal: something real people can use and pay for. Estimated timeline: 4–6 weeks solo.
+Still the priority — get the "pick seeds, generate a vibe playlist" loop
+working end to end against the local stack.
 
 | # | Feature | Notes | Status |
 |---|---------|-------|--------|
-| 1 | Spotify OAuth | Better Auth genericOAuth plugin. Authorization Code flow. Store `access_token`, `refresh_token`, `expires_at` in Neon. | [x] |
+| 1 | Spotify OAuth | Better Auth genericOAuth plugin. Authorization Code flow. Tokens stored in Better Auth's `account` table. | [x] |
 | 2 | Liked songs ingestion + storage | Paginate `GET /me/tracks`. Store per user in DB. Free tier capped at 250 songs. | [x] |
 | 3 | Seed song picker UI | Searchable, mobile-first. Fast scroll through liked library. Highest-leverage UX investment. | [~] |
 | 4 | Vibe analysis via Claude | Send 3–5 seed song names/artists to Claude. Return vibe name + descriptor + scoring criteria as JSON. | [ ] |
@@ -28,7 +36,7 @@ Add payments, metadata enrichment, and the AI art that makes sharing compelling.
 | 7 | Last.fm/MusicBrainz metadata enrichment | Fetch genre tags, BPM, era per track. Powers better matching without Spotify audio features. | [~] Last.fm done (Phases 1-4). BPM dropped (no source). MusicBrainz deferred. |
 | 8 | Free vs paid tier enforcement | 250 song cap for free. Generation limits enforced server-side. | [ ] |
 | 9 | Stripe integration | Standard ($10/yr) and Power ($25/yr) tiers. Free until revenue. | [ ] |
-| 10 | Auto-sync | Vercel cron nightly. Refresh liked songs pool + update active playlists. Lazy token refresh. | [ ] |
+| 10 | Auto-sync | Dropped — there's no host to run a nightly cron. Manual sync via the dashboard is sufficient for personal use. | [dropped] |
 | 11 | AI art generation | Stable Diffusion via Replicate (~$0.005/image). Cache by sorted seed song combo. Paid users only. | [ ] |
 | 12 | "What changed" digest | Surface new songs added to existing playlists. Email or in-app banner. | [ ] |
 

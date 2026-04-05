@@ -1,51 +1,62 @@
 # ADR 009: Async Job Processing
 
-**Status:** Accepted
+**Status:** Accepted (original rationale partially superseded by [ADR 010](010-personal-use-only.md))
 **Date:** 2026-03
+
+> **Note:** This ADR was originally written assuming a Vercel deployment with
+> 10–60s function timeouts. Vibe Tape is now local-only ([ADR 010](010-personal-use-only.md)),
+> so that specific constraint no longer applies. Inngest is still the right
+> call for local development — the Dev Server runs in Docker, step functions
+> give us retry granularity and an observable dashboard, and the code path is
+> identical to what a hosted Inngest deployment would look like. The
+> alternatives section below is kept as historical context.
 
 ## Context
 
-Vibe Tape needs background processing for operations that exceed Vercel's serverless function timeout:
+Vibe Tape needs background processing for operations that take longer than a
+user should wait synchronously:
 
-- **Library sync:** Paginating a user's Spotify liked songs can require 100+ API calls for large libraries (50 songs per page). A user with 5,000 songs triggers ~100 sequential requests — well beyond Vercel's 10s (hobby) or 60s (pro) function timeout.
-- **Playlist generation (future):** Scoring thousands of songs against vibe criteria and pushing results to Spotify.
-- **Nightly auto-sync (future):** Batch-refreshing all users' libraries on a schedule.
+- **Library sync:** Paginating a user's Spotify liked songs can require 100+
+  API calls for large libraries (50 songs per page).
+- **Enrichment pipeline:** Multi-step Spotify + Claude + Last.fm enrichment
+  runs per-track and benefits from independently retryable steps.
+- **Playlist generation (future):** Scoring thousands of songs against vibe
+  criteria and pushing results to Spotify.
 
-These operations should not block the user experience, need retry logic for transient Spotify API failures, and must work within Vercel's serverless constraints.
-
-**Key constraints:**
-- Deployed to Vercel (serverless — no persistent worker processes)
-- Postgres on Neon (no local Redis or persistent queues)
-- $0 budget initially, minimal cost at scale
-- Must be simple to set up and maintain solo
+These operations should not block the UI, need retry logic for transient
+API failures, and should be observable when debugging locally.
 
 ## Decision
 
-**Phase 1 (MVP):** Use **Inngest** free tier.
+Use **Inngest** via the Inngest Dev Server (Docker Compose).
 
-- 50,000 executions/month free
-- Native Next.js/Vercel integration
-- Zero infrastructure to manage
 - Step functions for multi-stage processing with automatic retries
+- Dev Server provides a local dashboard showing job status, failures, and
+  step-by-step execution
+- No separate worker process — the Next.js app's `/api/inngest` handler
+  *is* the worker, invoked over HTTP by the Dev Server
 
-**Phase 2 (if needed):** Migrate to **Railway worker + BullMQ** if Inngest costs exceed budget at scale.
+The chunked-step pattern (process N items per step, persist, loop) is
+retained. It was originally introduced to fit within Vercel's 60s timeout,
+but the retry granularity it provides is valuable on its own: a failure
+partway through a long sync doesn't restart from the beginning.
 
 ## Alternatives Considered
+
+> Originally evaluated in the context of a hosted Vercel deployment. Kept here
+> for historical context.
 
 ### Vercel `waitUntil()`
 **Rejected:** Continues processing after returning a response, but still subject to the function timeout. No retry logic, no visibility into job status, no step-based checkpointing.
 
 ### Postgres-Based Queues (pg-boss, Graphile Worker)
-**Rejected:** Require a persistent worker process. Cannot run on Vercel serverless. Would need a separate worker server, negating the cost and simplicity advantage.
+**Rejected:** Require a persistent worker process. Were rejected when the target was Vercel serverless. Would actually be viable now that the project is local-only, but there's no reason to migrate off Inngest for personal use.
 
 ### Trigger.dev
-**Considered:** Similar to Inngest but smaller free tier ($5/month credit vs. 50k executions). More complex than needed for our use cases.
+**Considered:** Similar to Inngest but smaller free tier. More complex than needed for our use cases.
 
 ### BullMQ + Redis
-**Deferred to Phase 2:** Requires separate worker server (~$7/mo on Railway) + managed Redis (~$10/mo on Upstash). More cost-effective at scale but unnecessary overhead for MVP.
-
-### Vercel Cron Jobs
-**Insufficient alone:** Limited to 10-60s execution time. Useful for triggering jobs (e.g., nightly sync fires an Inngest event) but cannot run the actual long-running work.
+**Rejected:** Extra infrastructure (Redis + worker) with no benefit for a single-user local setup.
 
 ## Implementation
 
@@ -127,29 +138,14 @@ sync: protectedProcedure.mutation(async ({ ctx }) => {
 ## Consequences
 
 ### Advantages
-- **$0 cost** for MVP (50k executions/month covers early users easily)
-- **Zero infrastructure** — no Redis, no worker servers
-- **Built for Vercel** — native Next.js integration, runs as serverless functions
+- **Zero extra infrastructure** — the Dev Server is a single Docker Compose service
 - **Step functions** — each step is independently retryable; a failure on page 50 of pagination doesn't restart from page 1
-- **Observability** — built-in dashboard shows job status, failures, and execution time
-- **Local dev mode** — Inngest Dev Server for testing workflows locally
+- **Observability** — the Dev Server dashboard at `localhost:8288` shows job status, failures, and per-step timing
+- **Same SDK as the hosted product** — if we ever needed to move off local, the code wouldn't change
 
 ### Limitations
-- **Vendor coupling** — migration requires rewriting job handlers (though the mapping to BullMQ is straightforward)
-- **Usage-based pricing** — costs grow with job volume past 50k/month
-- **Less control** — can't tune worker concurrency or Redis config
-
-### Migration Path
-
-If Inngest costs exceed budget:
-
-1. Deploy worker to Railway (~$7/mo)
-2. Set up managed Redis on Upstash (~$10/mo)
-3. Install BullMQ and rewrite job handlers
-4. Dual-write jobs to both systems during transition
-5. Remove Inngest
-
-Estimated migration: 1-2 days.
+- **Vendor coupling to Inngest's SDK** — acceptable for a personal project
+- **Dev Server must be running** — jobs don't execute when Docker isn't up
 
 ## References
 

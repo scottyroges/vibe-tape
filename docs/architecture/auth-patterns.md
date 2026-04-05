@@ -98,7 +98,7 @@ Tokens are refreshed lazily via `getValidToken(userId)` in `src/lib/spotify-toke
 
 ### Local Development Note
 
-Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). Use `http://127.0.0.1:3000` and set `BETTER_AUTH_URL=http://127.0.0.1:3000` in `.env.local`.
+Spotify no longer supports `localhost` as a redirect URI (deprecated Nov 2025). Use `http://127.0.0.1:3000` and set `BETTER_AUTH_URL=http://127.0.0.1:3000` in `.env`.
 
 **Spotify redirect URI:** Better Auth's `genericOAuth` plugin uses the path `/api/auth/oauth2/callback/{providerId}`. In the Spotify Developer Dashboard, set the redirect URI to:
 ```
@@ -126,10 +126,11 @@ export function middleware(request: NextRequest) {
 
 ### Inngest Endpoint Auth
 
-`/api/inngest` is public in our middleware (no session cookie required) but protected by two layers:
-
-- **Middleware layer (our code):** Skipped — `/api/inngest` is in the public routes list so the Inngest server can reach it without a user session cookie.
-- **Inngest SDK layer (`serve()`):** In production, the SDK verifies a request signing key (`INNGEST_SIGNING_KEY`) to ensure only Inngest's cloud can invoke functions. In local dev (`INNGEST_DEV=1`), signature verification is disabled so the Docker-based Dev Server can reach the endpoint without keys.
+`/api/inngest` is public in our middleware (no session cookie required). With
+`INNGEST_DEV=1` set in `.env`, the Inngest SDK's `serve()` handler disables
+signing key verification so the Docker-based Dev Server can reach the
+endpoint without keys. There is no production Inngest environment — see
+[ADR 010](../decisions/010-personal-use-only.md).
 
 **Why cookie-only check:**
 - Faster than database lookup
