@@ -1339,10 +1339,25 @@ polling cap unsticks the UI even if the TTL ever misfires.
   is preserved across generate/regenerate/top-up.
   `computePerArtistCap` is colocated with the generate function for
   now — promote to `@/lib/playlist-scoring` if PR G wants to reuse it.
-- **PR F — Save/discard flow.** `playlist.save` (inline tRPC) and
-  `playlist.discard`. Playlist detail page in PENDING state with Save/
-  Discard/Regenerate buttons. Shipping this gets the user from seeds to
-  a live Spotify playlist end-to-end.
+- **PR F — Save/discard flow.** Implemented on
+  `feat/playlist-pr-f-save-discard-detail`. Adds `playlist.save` (inline
+  tRPC mutation — `findByIdWithTracks` → `getValidToken` →
+  `createPlaylist` → `addTracksToPlaylist` → `markSaved`, with the
+  partial-failure orphan tradeoff per the design), `playlist.discard`
+  (rejects `SAVED`, deletes any other status), and `playlist.getById`
+  (returns playlist + resolved generated tracks + resolved seed tracks
+  in `seedSongIds` order, with the stuck-GENERATING TTL override applied
+  on the wire). Confirm page gains the duration preset picker
+  (30/60/90/120), optional vibe textarea with 280-char counter, and a
+  Generate button wired to `playlist.generate` (disabled during
+  `isPending`, redirects to `/playlist/[id]` on success). New
+  `app/(app)/playlist/[id]/page.tsx` polls `getById` at 1s while
+  `GENERATING` with a `MAX_POLLS = 120` client-side cap, and renders a
+  per-status layout (spinner / PENDING Save+Discard+Regenerate / SAVED
+  Open in Spotify+Regenerate+Add more / FAILED error+Discard).
+  Regenerate and Add-more buttons are rendered disabled with
+  `title="Coming soon"` — PR G wires the onClick handlers without
+  touching the layout.
 - **PR G — Regenerate + top-up Inngest functions + tRPC mutations.**
   Extends the detail page with regenerate/top-up actions for `SAVED`
   playlists. Also handles the Spotify sync via
@@ -1458,7 +1473,11 @@ adjacent ones (e.g., C+D, or F+G).
   any other status.
 - Detail page: renders correct buttons per status (PENDING shows
   Save/Discard/Regenerate, SAVED shows Open in Spotify/Regenerate/Add
-  more, FAILED shows Retry/Discard, GENERATING shows spinner).
+  more, FAILED shows Discard + error message, GENERATING shows spinner).
+  Regenerate and Add-more are rendered disabled with `title="Coming
+  soon"` in PR F — PR G wires their onClick handlers without touching
+  the layout. Retry on FAILED is deferred to PR G (depends on
+  regenerate).
 - Generate button on confirm page disables during mutation (React
   Query `isPending`) to prevent double-click.
 

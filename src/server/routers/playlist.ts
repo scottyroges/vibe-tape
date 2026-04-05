@@ -1,13 +1,12 @@
 /**
  * Playlist tRPC router.
  *
- * For PR E this exposes a single mutation — `playlist.generate` —
- * which validates input, inserts a `GENERATING` placeholder, and fires
- * the `playlist/generate.requested` Inngest event. The Inngest function
- * populates the recipe and flips the row to `PENDING`. Save / discard /
- * regenerate / top-up / list queries ship in later PRs.
+ * Covers the generate (PR E) + save/discard/detail-page (PR F) surface.
+ * `save` runs inline inside the mutation — no Inngest step — because
+ * it's a one-shot Spotify write and the user is waiting on the response.
+ * Regenerate / top-up / list queries ship in later PRs.
  *
- * See: docs/plans/active/playlist-generation-hybrid.md (PR E).
+ * See: docs/plans/active/playlist-generation-hybrid.md (PRs E + F).
  */
 
 import { z } from "zod";
@@ -16,6 +15,11 @@ import { router, protectedProcedure } from "@/server/trpc";
 import { inngest } from "@/lib/inngest";
 import { trackRepository } from "@/repositories/track.repository";
 import { playlistRepository } from "@/repositories/playlist.repository";
+import { getValidToken } from "@/lib/spotify-token";
+import {
+  createPlaylist,
+  addTracksToPlaylist,
+} from "@/lib/spotify";
 
 const USER_INTENT_MAX_LENGTH = 280;
 const MIN_SEED_COUNT = 3;
@@ -23,6 +27,16 @@ const MAX_SEED_COUNT = 5;
 const MIN_TARGET_DURATION_MINUTES = 15;
 const MAX_TARGET_DURATION_MINUTES = 240;
 const DEFAULT_TARGET_DURATION_MINUTES = 60;
+
+/**
+ * Read-layer TTL override. If `onFailure` itself fails (DB down during
+ * the transition etc.) a playlist row can be stuck at `GENERATING`
+ * forever. `getById` reports such rows as `FAILED` on the wire without
+ * writing to the DB — the next regenerate/discard sweeps the stale row
+ * via the normal paths. Five minutes is generous; realistic generation
+ * takes 3–6 seconds. See the plan section "Stuck-GENERATING TTL override".
+ */
+const STUCK_GENERATING_MS = 5 * 60_000;
 
 /**
  * Seed count is enforced by zod (3–5) and by the Claude prompt design.
@@ -95,5 +109,151 @@ export const playlistRouter = router({
       });
 
       return { playlistId };
+    }),
+
+  /**
+   * Load a playlist for the detail page. Returns the recipe, the
+   * resolved generated tracks (in `generatedTrackIds` order), and the
+   * resolved seed tracks (in `seedSongIds` order) so the page can render
+   * both lists without a second round trip.
+   *
+   * Applies the stuck-GENERATING TTL override on the wire: a row older
+   * than `STUCK_GENERATING_MS` still sitting at `GENERATING` gets
+   * reported as `FAILED` without a DB write. See the constant's docstring.
+   */
+  getById: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const playlist = await playlistRepository.findById(input.id);
+      if (!playlist || playlist.userId !== ctx.userId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // Fetch display fields for the union of generated + seed tracks in
+      // a single query. Seeds frequently also appear as generated tracks
+      // (they're passed as `requiredTrackIds` at generation time), so a
+      // separate query per list would double-fetch those rows.
+      const trackIdUnion = Array.from(
+        new Set([...playlist.generatedTrackIds, ...playlist.seedSongIds]),
+      );
+      const resolved = await trackRepository.findByIdsWithDisplayFields(
+        trackIdUnion,
+      );
+      const byId = new Map(resolved.map((t) => [t.id, t]));
+
+      // Re-order to match each source array — the query is unordered.
+      const orderedTracks = playlist.generatedTrackIds
+        .map((id) => byId.get(id))
+        .filter((t): t is (typeof resolved)[number] => t !== undefined);
+      const orderedSeeds = playlist.seedSongIds
+        .map((id) => byId.get(id))
+        .filter((t): t is (typeof resolved)[number] => t !== undefined);
+
+      // Stuck-GENERATING TTL override (read-only — no DB write).
+      const isStuck =
+        playlist.status === "GENERATING" &&
+        playlist.createdAt.getTime() < Date.now() - STUCK_GENERATING_MS;
+      const effectiveStatus = isStuck ? ("FAILED" as const) : playlist.status;
+      const effectiveErrorMessage = isStuck
+        ? (playlist.errorMessage ?? "Generation timed out")
+        : playlist.errorMessage;
+
+      return {
+        ...playlist,
+        status: effectiveStatus,
+        errorMessage: effectiveErrorMessage,
+        tracks: orderedTracks,
+        seeds: orderedSeeds,
+      };
+    }),
+
+  /**
+   * Push a `PENDING` playlist to Spotify. Runs inline — no Inngest step —
+   * because it's a single, one-shot write the user is waiting on.
+   *
+   * Partial-failure tradeoff (accepted, see plan): if `createPlaylist`
+   * succeeds but `addTracksToPlaylist` throws, the DB row stays at
+   * `PENDING` and the error propagates to the caller. On retry the
+   * mutation creates a *second* Spotify playlist; the first becomes an
+   * empty orphan. Fine at personal-use scale.
+   *
+   * The `status ↔ spotifyPlaylistId` invariant is enforced by
+   * `playlistRepository.markSaved` being the sole writer of either
+   * field — we don't touch the row until both Spotify calls succeed.
+   */
+  save: protectedProcedure
+    .input(z.object({ playlistId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const playlist = await playlistRepository.findByIdWithTracks(
+        input.playlistId,
+      );
+      if (!playlist || playlist.userId !== ctx.userId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      // Optimistic status check — not an atomic lock. Two concurrent
+      // save calls on the same playlist can both pass this gate and
+      // create two Spotify playlists. That's consistent with the
+      // accepted orphan tradeoff documented above; don't "fix" it by
+      // adding a DB lock unless the orphan assumption changes.
+      if (playlist.status !== "PENDING") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot save playlist in status ${playlist.status}; expected PENDING`,
+        });
+      }
+
+      const token = await getValidToken(ctx.userId);
+      if (!token) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Spotify re-authentication required",
+        });
+      }
+
+      const uris = playlist.tracks.map(
+        (t) => `spotify:track:${t.spotifyId}`,
+      );
+
+      const spotifyPlaylistId = await createPlaylist(token.accessToken, {
+        name: playlist.vibeName,
+        description: playlist.vibeDescription ?? "",
+        public: false,
+      });
+
+      // If this throws, the orphan Spotify playlist stays on the user's
+      // account and the DB row stays at `PENDING`. See the router-level
+      // comment above for the rationale.
+      await addTracksToPlaylist(
+        token.accessToken,
+        spotifyPlaylistId,
+        uris,
+      );
+
+      await playlistRepository.markSaved(input.playlistId, spotifyPlaylistId);
+
+      return { spotifyPlaylistId };
+    }),
+
+  /**
+   * Delete a non-`SAVED` playlist row. `SAVED` playlists are kept
+   * because they've been pushed to Spotify — deleting them is a
+   * separate flow if we ever build one.
+   */
+  discard: protectedProcedure
+    .input(z.object({ playlistId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const playlist = await playlistRepository.findById(input.playlistId);
+      if (!playlist || playlist.userId !== ctx.userId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (playlist.status === "SAVED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot discard a saved playlist",
+        });
+      }
+
+      await playlistRepository.delete(input.playlistId);
+      return { ok: true as const };
     }),
 });
