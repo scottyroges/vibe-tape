@@ -150,10 +150,16 @@ export default function PlaylistDetailPage() {
     vibeDescription,
     userIntent,
     tracks,
-    seeds,
+    seedSongIds,
     claudeTarget,
     mathTarget,
   } = playlist;
+  // Seed ids are inlined into the track list via a `Seed` badge on each
+  // row, so there's no separate seeds section. Seeds are guaranteed to
+  // appear in `generatedTrackIds` via `requiredTrackIds` at generation
+  // time (see playlist-scoring.ts `rankAndFilter`), so the lookup
+  // always resolves.
+  const seedIdSet = new Set(seedSongIds);
 
   // ── GENERATING ────────────────────────────────────────────────────────
   if (status === "GENERATING") {
@@ -324,33 +330,11 @@ export default function PlaylistDetailPage() {
               vibeProfile={trackVibeProfile(t)}
               claudeTarget={claudeTarget}
               mathTarget={mathTarget}
+              isSeed={seedIdSet.has(t.id)}
             />
           ))}
         </div>
       </section>
-
-      {seeds.length > 0 && (
-        <details className={styles.seedsDisclosure}>
-          <summary className={styles.seedsSummary}>
-            <span className={styles.seedsSummaryLabel}>
-              Seeds ({seeds.length})
-            </span>
-            <span className={styles.seedsSummaryHint}>
-              the tracks this vibe was built from
-            </span>
-          </summary>
-          <div className={styles.trackList}>
-            {seeds.map((t) => (
-              <TrackRow
-                key={t.id}
-                albumArtUrl={t.albumArtUrl}
-                title={t.name}
-                artist={t.artistsDisplay}
-              />
-            ))}
-          </div>
-        </details>
-      )}
     </div>
   );
 }
@@ -391,21 +375,28 @@ function TrackRow({
   vibeProfile,
   claudeTarget,
   mathTarget,
+  isSeed = false,
 }: {
   albumArtUrl: string | null;
   title: string;
   artist: string;
   // All three scores are optional so this component works for both
-  // generated tracks (always have scores) and seed rows (no persisted
-  // scores). When any is null/undefined, the score cell is omitted.
+  // generated tracks (always have scores) and legacy rows without
+  // persisted scores. When any is null/undefined, the score cell is
+  // omitted.
   claudeScore?: number | null;
   mathScore?: number | null;
   finalScore?: number | null;
   // Per-component breakdown inputs. If any is missing, the row stays
-  // non-expandable (seeds section, legacy rows).
+  // non-expandable (legacy rows, tracks without vibe data).
   vibeProfile?: VibeProfile | null;
   claudeTarget?: VibeProfile | null;
   mathTarget?: VibeProfile | null;
+  // When true, renders a small "Seed" pill next to the title so the
+  // user can tell at a glance which tracks in the generated playlist
+  // are the ones they originally picked. Seeds are guaranteed to
+  // appear in the generated list via `requiredTrackIds`.
+  isSeed?: boolean;
 }) {
   const hasScores =
     claudeScore != null && mathScore != null && finalScore != null;
@@ -430,7 +421,17 @@ function TrackRow({
         </div>
       )}
       <div className={styles.trackInfo}>
-        <div className={styles.trackName}>{title}</div>
+        <div className={styles.trackName}>
+          {title}
+          {isSeed && (
+            <span
+              className={styles.seedBadge}
+              title="One of your seed tracks"
+            >
+              Seed
+            </span>
+          )}
+        </div>
         <div className={styles.artistName}>{artist}</div>
       </div>
       {hasScores && (
