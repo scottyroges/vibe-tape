@@ -5,6 +5,7 @@ import {
   SCORE_WEIGHTS,
   computeFinalScore,
   computeMathTarget,
+  normalizeTitleForDedup,
   rankAndFilter,
   scoreTrack,
   scoreTrackBreakdown,
@@ -33,6 +34,7 @@ function track(
 ): ScoredTrack {
   return {
     trackId: id,
+    name: id, // default name == id; dedup tests override with real titles
     primaryArtistId: "artist-" + id,
     durationMs: 3 * 60 * 1000,
     claudeScore: 0,
@@ -666,5 +668,199 @@ describe("rankAndFilter", () => {
       ...NO_SHUFFLE,
     });
     expect(result.length).toBe(2);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// normalizeTitleForDedup — collapse variant markers to a canonical core
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("normalizeTitleForDedup", () => {
+  it("collapses parenthetical variant markers", () => {
+    expect(normalizeTitleForDedup("Call on Me")).toBe("call on me");
+    expect(normalizeTitleForDedup("Call on Me (Radio Edit)")).toBe("call on me");
+    expect(normalizeTitleForDedup("Call on Me (Radio Mix)")).toBe("call on me");
+  });
+
+  it("collapses bracketed + brace variant markers", () => {
+    expect(normalizeTitleForDedup("Hey Jude [Remastered 2015]")).toBe("hey jude");
+    expect(normalizeTitleForDedup("Song {Bonus Track}")).toBe("song");
+  });
+
+  it("strips dash-separated variant suffixes", () => {
+    expect(normalizeTitleForDedup("Call on Me - Radio Mix")).toBe("call on me");
+    expect(normalizeTitleForDedup("Bohemian Rhapsody - Remastered 2011")).toBe(
+      "bohemian rhapsody",
+    );
+    expect(normalizeTitleForDedup("Someone Like You - Live")).toBe(
+      "someone like you",
+    );
+  });
+
+  it("keeps literal hyphens in the title (no surrounding whitespace)", () => {
+    // Dash strip only fires on `\s+-\s+` — titles with internal hyphens
+    // like "Rock-a-Bye" survive. Without this, many legit titles would
+    // lose everything after the hyphen.
+    expect(normalizeTitleForDedup("Rock-a-Bye")).toBe("rock a bye");
+  });
+
+  it("strips trailing feat./ft./featuring clauses", () => {
+    expect(normalizeTitleForDedup("Hey Jude feat. The Beatles")).toBe("hey jude");
+    expect(normalizeTitleForDedup("Love Yourself ft Ed Sheeran")).toBe(
+      "love yourself",
+    );
+    expect(normalizeTitleForDedup("Song featuring someone")).toBe("song");
+  });
+
+  it("is case-insensitive and whitespace-tolerant", () => {
+    expect(normalizeTitleForDedup("  CALL ON ME   ")).toBe("call on me");
+    expect(normalizeTitleForDedup("Call On Me")).toBe("call on me");
+  });
+
+  it("strips punctuation to spaces and collapses whitespace", () => {
+    expect(normalizeTitleForDedup("Don't Stop Me Now!")).toBe(
+      "don t stop me now",
+    );
+  });
+
+  it("falls back to the raw lowercased title when normalization empties the string", () => {
+    // Title is entirely parenthetical — avoid mass-collapsing tracks
+    // to a single empty key.
+    expect(normalizeTitleForDedup("(Live)")).toBe("(live)");
+  });
+
+  it("does NOT strip 'remix' — remixes are distinct artistic works", () => {
+    // Intentional design choice. A Daft Punk Remix of a song is a
+    // different track than the original; keep both in the library and
+    // let the user have them both in the playlist.
+    expect(normalizeTitleForDedup("Song (Daft Punk Remix)")).toBe("song");
+    expect(normalizeTitleForDedup("Song - Daft Punk Remix")).toBe("song");
+    // But if the whole title is just "Remix", it survives.
+    expect(normalizeTitleForDedup("Remix")).toBe("remix");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// rankAndFilter — dedup of near-duplicate variants
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("rankAndFilter dedup", () => {
+  const NO_SHUFFLE = { shuffleWindowSize: 1 as const };
+
+  it("keeps only the highest-scoring variant of a song by the same artist", () => {
+    // Three variants by the same artist, same normalized core.
+    // rankAndFilter sorts by finalScore DESC before walking, so the
+    // 0.9 variant claims the dedup key and the others are dropped.
+    const candidates: ScoredTrack[] = [
+      track("a1", {
+        name: "Call on Me (Radio Edit)",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.7,
+      }),
+      track("a2", {
+        name: "Call on Me",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.9,
+      }),
+      track("a3", {
+        name: "Call on Me - Radio Mix",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.5,
+      }),
+    ];
+    const result = rankAndFilter(candidates, {
+      targetDurationMs: 60 * 60 * 1000,
+      perArtistCap: 10,
+      ...NO_SHUFFLE,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.trackId).toBe("a2");
+  });
+
+  it("keeps same-title tracks by different artists (dedup key includes artist)", () => {
+    // Eric Prydz and a hypothetical cover by a different artist both
+    // called "Call on Me" — distinct songs, both should appear.
+    const candidates: ScoredTrack[] = [
+      track("prydz", {
+        name: "Call on Me",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.9,
+      }),
+      track("cover", {
+        name: "Call on Me",
+        primaryArtistId: "artist-cover",
+        finalScore: 0.8,
+      }),
+    ];
+    const result = rankAndFilter(candidates, {
+      targetDurationMs: 60 * 60 * 1000,
+      perArtistCap: 10,
+      ...NO_SHUFFLE,
+    });
+    expect(result.map((r) => r.trackId).sort()).toEqual(["cover", "prydz"]);
+  });
+
+  it("drops non-seed variants that collide with a required seed track", () => {
+    // Seed is "Call on Me"; library has a high-scoring "(Radio Edit)"
+    // variant by the same artist. The seed is required, so it stays;
+    // the variant must be filtered out despite its high score.
+    const candidates: ScoredTrack[] = [
+      track("seed", {
+        name: "Call on Me",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.2, // low score — would normally lose to the variant
+      }),
+      track("variant", {
+        name: "Call on Me (Radio Edit)",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.95,
+      }),
+      // Unrelated track to prove we're not filtering everything.
+      track("other", {
+        name: "Some Other Song",
+        primaryArtistId: "artist-prydz",
+        finalScore: 0.8,
+      }),
+    ];
+    const result = rankAndFilter(candidates, {
+      targetDurationMs: 60 * 60 * 1000,
+      perArtistCap: 10,
+      requiredTrackIds: ["seed"],
+      ...NO_SHUFFLE,
+    });
+    const ids = result.map((r) => r.trackId);
+    expect(ids).toContain("seed");
+    expect(ids).not.toContain("variant");
+    expect(ids).toContain("other");
+  });
+
+  it("drops top-up candidates that match the dedup key of an existing track", () => {
+    // Top-up flow: a "Call on Me" is already in the playlist (passed
+    // via excludeIds). A "(Radio Edit)" variant shouldn't get picked
+    // as a top-up — the user already has that song.
+    const existing = track("existing", {
+      name: "Call on Me",
+      primaryArtistId: "artist-prydz",
+      finalScore: 0.5,
+    });
+    const variant = track("variant", {
+      name: "Call on Me (Radio Edit)",
+      primaryArtistId: "artist-prydz",
+      finalScore: 0.95,
+    });
+    const fresh = track("fresh", {
+      name: "New Song",
+      primaryArtistId: "artist-prydz",
+      finalScore: 0.8,
+    });
+    const result = rankAndFilter([existing, variant, fresh], {
+      targetDurationMs: 60 * 60 * 1000,
+      perArtistCap: 10,
+      excludeIds: new Set(["existing"]),
+      ...NO_SHUFFLE,
+    });
+    const ids = result.map((r) => r.trackId);
+    expect(ids).not.toContain("variant");
+    expect(ids).toContain("fresh");
   });
 });

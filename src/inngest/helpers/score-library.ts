@@ -60,6 +60,10 @@ export async function scoreLibrary(
     );
     return {
       trackId: t.id,
+      // Threaded through so `rankAndFilter` can build the dedup key
+      // that collapses near-duplicate variants ("Call on Me", "Call on
+      // Me (Radio Edit)", …) via `normalizeTitleForDedup`.
+      name: t.name,
       primaryArtistId: t.primaryArtistId,
       durationMs: t.durationMs ?? 0,
       claudeScore,
