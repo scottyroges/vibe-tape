@@ -13,7 +13,7 @@
  * error at personal-use scale, and it eliminates a whole class of
  * normalizer edge cases.
  *
- * See: docs/plans/active/playlist-generation-hybrid.md (PR B).
+ * See: docs/plans/completed/playlist-generation-hybrid.md (PR B).
  */
 
 import {

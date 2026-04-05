@@ -15,7 +15,7 @@
  * If the playlist is already `SAVED`, appends the new URIs to the live
  * Spotify playlist via `POST /v1/playlists/{id}/tracks`.
  *
- * See: docs/plans/active/playlist-generation-hybrid.md (PR G).
+ * See: docs/plans/completed/playlist-generation-hybrid.md (PR G).
  */
 
 import { inngest } from "@/lib/inngest";

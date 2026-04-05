@@ -1387,9 +1387,26 @@ polling cap unsticks the UI even if the TTL ever misfires.
   `tests/server/routers/playlist.test.ts`, new `setStatus` assertion
   in `tests/repositories/playlist.repository.test.ts`, and two new
   cases in `src/app/(app)/playlist/[id]/page.test.tsx`.
-- **PR H — Dashboard list view.** `playlist.listByUser` + UI. Depends
-  on F/G being shipped so the list has interesting statuses and actions
-  to render.
+- **PR H — Dashboard list view.** Implemented on
+  `feat/playlist-pr-h-dashboard-list`. Adds `playlist.listByUser`
+  protected query backed by the existing
+  `playlistRepository.findAllByUserSummary` (shipped in PR C). The
+  dashboard renders a **Your Vibe Tapes** section: each playlist is a
+  card with vibe name, one-line description, track count + creation
+  date, a status badge (`PENDING` / `SAVED` / `FAILED` /
+  `GENERATING`), and a quick-action row — Regenerate and Add more on
+  `PENDING`/`SAVED`, Open in Spotify on `SAVED` only, Discard on
+  anything except `SAVED` (matching `playlist.discard`'s own
+  rejection rule). The card title links to `/playlist/{id}`. Dashboard
+  mutations + the detail page's regenerate/top-up/discard paths all
+  invalidate the `listByUser` query on success so the list stays
+  fresh. Empty state reads "No vibe tapes yet. Pick some seeds to
+  create your first one." above the existing Create button. Tests:
+  new `listByUser` block in `tests/server/routers/playlist.test.ts`
+  and a "Your Vibe Tapes list" describe in
+  `src/app/(app)/dashboard/page.test.tsx` covering card rendering,
+  Open-in-Spotify gating, Regenerate/Add-more gating, Discard gating,
+  and invalidation after regenerate.
 
 Seven PRs total. A, B, C, D are independent small PRs that unblock E.
 E gets the core generate flow working but sitting at PENDING. F closes
