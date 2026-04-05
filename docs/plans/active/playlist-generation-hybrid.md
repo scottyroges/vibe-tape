@@ -1261,14 +1261,18 @@ polling cap unsticks the UI even if the TTL ever misfires.
   `rankAndFilter`, and `MAX_PLAYLIST_TRACKS = 100`. Pure, tested in
   isolation at `tests/lib/playlist-scoring.test.ts`. No DB, no Inngest,
   no tRPC.
-- **PR B — Claude target prompt + validation.** First: extract
-  `normalizeClaudeMood` from `sync-library.ts` into
-  `src/lib/prompts/canonical-mood.ts` (behavior-preserving refactor)
-  and update `sync-library.ts` to import from the new location. Then:
-  new `generate-playlist-criteria.ts` prompt file, new Claude client
-  wrapper, validation schema that imports the shared normalizer. Unit
-  tests for the prompt content, the validation guard, and the
-  normalizer's case/whitespace handling.
+- **PR B — Claude target prompt + validation.** ✅ Shipped.
+  Extracted `normalizeClaudeMood` from `sync-library.ts` into
+  `src/lib/prompts/canonical-mood.ts` (behavior-preserving) and
+  exported `GENRE_VOCAB` from `src/lib/vibe-profile.ts`. Added
+  `src/lib/prompts/generate-playlist-criteria.ts` with the prompt
+  builder (full mood + genre vocabs inlined, optional user intent)
+  and a strict response validator with length caps. Added
+  `generatePlaylistCriteria` wrapper in `src/lib/claude.ts`,
+  refactored to share a private `parseJsonFromClaude` helper with
+  `classifyTracks`. Tests at `tests/lib/prompts/canonical-mood.test.ts`
+  and `tests/lib/prompts/generate-playlist-criteria.test.ts`. No
+  schema, Inngest, tRPC, or UI yet.
 - **PR C — Schema + repositories.** Prisma migration adding `status`
   enum, `generatedTrackIds`, `targetDurationMinutes`, `claudeTarget`,
   `mathTarget`, `errorMessage`. New `playlistRepository` + new track

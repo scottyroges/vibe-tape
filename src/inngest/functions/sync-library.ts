@@ -10,9 +10,9 @@ import {
 } from "@/lib/enrichment";
 import {
   buildClassifyPrompt,
-  CANONICAL_MOODS,
   type CanonicalMood,
 } from "@/lib/prompts/classify-tracks";
+import { normalizeClaudeMood } from "@/lib/prompts/canonical-mood";
 import { classifyTracks } from "@/lib/claude";
 import { deriveVibeProfile } from "@/lib/vibe-profile";
 import { trackRepository } from "@/repositories/track.repository";
@@ -27,31 +27,6 @@ const CLAUDE_BATCH_SIZE = 50;
 const VIBE_DERIVATION_CHUNK_SIZE = 500;
 
 const VALID_ENERGY_VALUES = new Set(["low", "medium", "high"]);
-const CANONICAL_MOOD_SET: ReadonlySet<string> = new Set(CANONICAL_MOODS);
-
-/**
- * Normalize a raw mood value from Claude into a canonical mood or null.
- *
- * - `null` stays `null` (Claude's explicit "no canonical fit" signal).
- * - A string matching a canonical mood (case/whitespace-insensitive) is
- *   returned in its canonical (lowercase, trimmed) form.
- * - Anything else — off-list strings, non-strings, empty strings — returns
- *   `undefined`, which the validator treats as rejection.
- *
- * Used by both the validator and the caller that writes to the DB so that
- * a track with mood `"Uplifting"` from Claude is both accepted AND stored
- * as the canonical `"uplifting"`.
- */
-function normalizeClaudeMood(
-  raw: unknown
-): CanonicalMood | null | undefined {
-  if (raw === null) return null;
-  if (typeof raw !== "string") return undefined;
-  const normalized = raw.toLowerCase().trim();
-  return CANONICAL_MOOD_SET.has(normalized)
-    ? (normalized as CanonicalMood)
-    : undefined;
-}
 
 function isValidClassification(c: unknown): c is {
   mood: CanonicalMood | null;
