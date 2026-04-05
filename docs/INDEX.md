@@ -42,10 +42,12 @@
 ## Work Plans
 
 - **Active work plans:** .personal/docs/plans/active/
-  - Per-Source Versioning, Async Last.fm & Vibe Profile: docs/plans/active/per-source-versioning-async-lastfm.md
+  - Vibe Profile Derivation: docs/plans/active/vibe-profile-derivation.md
+  - Claude Prompt v2 — Canonical Moods (follow-up to vibe profile): docs/plans/active/claude-prompt-v2-canonical-moods.md
 - **Completed work plans:** .personal/docs/plans/completed/
   - Track Enrichment Pipeline (parent plan): docs/plans/completed/track-enrichment-pipeline.md
   - Phase 1 — Artist Model + Expanded Spotify Data: .personal/docs/plans/completed/phase1-artist-model-spotify-data.md
   - Phase 2 — Enrichment Pipeline Foundation: .personal/docs/plans/completed/phase2-enrichment-pipeline-foundation.md
   - Phase 3 — Claude Mood/Energy Classification: docs/plans/completed/phase3-claude-classification.md
   - Phase 4 — Last.fm Tags: docs/plans/completed/phase4-lastfm-tags.md
+  - Per-Source Versioning, Async Last.fm & Vibe Profile (parent of vibe profile plan): docs/plans/completed/per-source-versioning-async-lastfm.md
