@@ -19,6 +19,7 @@ import { getValidToken } from "@/lib/spotify-token";
 import {
   createPlaylist,
   addTracksToPlaylist,
+  removeTracksFromPlaylist,
 } from "@/lib/spotify";
 
 const USER_INTENT_MAX_LENGTH = 280;
@@ -367,6 +368,82 @@ export const playlistRouter = router({
       }
 
       await playlistRepository.delete(input.playlistId);
+      return { ok: true as const };
+    }),
+
+  /**
+   * Remove a single track from a `PENDING` or `SAVED` playlist. Runs
+   * inline — no Inngest step — because it's one row touching one
+   * field plus an optional one-shot Spotify call. The user is waiting.
+   *
+   * For `SAVED` playlists we delete from Spotify **first**, then update
+   * the DB. Same failure-order rationale as `playlist.save`: if the
+   * Spotify call fails we surface the error to the user and the DB
+   * still reflects the pre-removal state, so the next load shows the
+   * track and the user can retry. If the DB update fails after a
+   * successful Spotify delete, the UI will still show the removed
+   * track on next load (annoying but recoverable — clicking remove
+   * again is a no-op on Spotify's side since the delete is idempotent).
+   *
+   * Spotify's `DELETE /v1/playlists/{id}/tracks` is idempotent —
+   * removing a URI that isn't in the playlist returns a snapshot_id
+   * without error — so retries are safe.
+   */
+  removeTrack: protectedProcedure
+    .input(
+      z.object({
+        playlistId: z.string().min(1),
+        trackId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const playlist = await playlistRepository.findById(input.playlistId);
+      if (!playlist || playlist.userId !== ctx.userId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (playlist.status !== "PENDING" && playlist.status !== "SAVED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot remove tracks from a playlist in status ${playlist.status}; expected PENDING or SAVED`,
+        });
+      }
+      if (!playlist.generatedTrackIds.includes(input.trackId)) {
+        // Nothing to do — but return ok so the client can invalidate
+        // and re-fetch (likely a stale UI).
+        return { ok: true as const };
+      }
+
+      // Sync Spotify first on SAVED playlists so a Spotify failure
+      // short-circuits before we mutate the DB.
+      if (playlist.status === "SAVED" && playlist.spotifyPlaylistId) {
+        const token = await getValidToken(ctx.userId);
+        if (!token) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Spotify re-authentication required",
+          });
+        }
+        // Fetch the track's Spotify URI — the playlist row only carries
+        // internal track IDs.
+        const [track] = await trackRepository.findByIds([input.trackId]);
+        if (!track) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Track not found",
+          });
+        }
+        await removeTracksFromPlaylist(
+          token.accessToken,
+          playlist.spotifyPlaylistId,
+          [`spotify:track:${track.spotifyId}`],
+        );
+      }
+
+      await playlistRepository.removeTrack(
+        input.playlistId,
+        input.trackId,
+      );
+
       return { ok: true as const };
     }),
 });

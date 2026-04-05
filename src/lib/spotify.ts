@@ -218,3 +218,33 @@ export async function replacePlaylistTracks(
     }
   );
 }
+
+/**
+ * Remove specific tracks from a playlist. `DELETE /v1/playlists/{id}/tracks`
+ * takes a body of `{ tracks: [{ uri }, …] }`. Spotify's delete is
+ * idempotent — passing a URI that isn't in the playlist just no-ops
+ * and still returns a `snapshot_id`, so retries are safe. Batches at
+ * 100 URIs per call to mirror the limit on the add-tracks endpoint.
+ * No-ops on an empty `uris` array.
+ */
+export async function removeTracksFromPlaylist(
+  accessToken: string,
+  playlistId: string,
+  uris: string[]
+): Promise<void> {
+  if (uris.length === 0) return;
+
+  const batches = chunk(uris, MAX_TRACKS_PER_PLAYLIST_REQUEST);
+  for (const batch of batches) {
+    await spotifyFetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      accessToken,
+      {
+        method: "DELETE",
+        body: JSON.stringify({
+          tracks: batch.map((uri) => ({ uri })),
+        }),
+      }
+    );
+  }
+}

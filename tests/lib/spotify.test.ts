@@ -6,6 +6,7 @@ import {
   fetchArtists,
   createPlaylist,
   addTracksToPlaylist,
+  removeTracksFromPlaylist,
   replacePlaylistTracks,
 } from "@/lib/spotify";
 
@@ -478,6 +479,78 @@ describe("replacePlaylistTracks", () => {
 
     await expect(
       replacePlaylistTracks("test-token", "pl-1", ["spotify:track:a"])
+    ).rejects.toThrow("Spotify API error: 500");
+  });
+});
+
+describe("removeTracksFromPlaylist", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("DELETEs with a { tracks: [{ uri }, …] } body", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse({ snapshot_id: "s1" })
+    );
+
+    await removeTracksFromPlaylist("test-token", "pl-1", [
+      "spotify:track:a",
+      "spotify:track:b",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls[0]!;
+    expect(url).toBe(
+      "https://api.spotify.com/v1/playlists/pl-1/tracks"
+    );
+    expect(init.method).toBe("DELETE");
+    expect(init.headers).toMatchObject({
+      Authorization: "Bearer test-token",
+      "Content-Type": "application/json",
+    });
+    expect(JSON.parse(init.body)).toEqual({
+      tracks: [
+        { uri: "spotify:track:a" },
+        { uri: "spotify:track:b" },
+      ],
+    });
+  });
+
+  it("no-ops on an empty uris array", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch");
+
+    await removeTracksFromPlaylist("test-token", "pl-1", []);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("batches at 100 URIs per call", async () => {
+    const uris = Array.from(
+      { length: 150 },
+      (_, i) => `spotify:track:t${i}`,
+    );
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(mockFetchResponse({ snapshot_id: "s1" }))
+      .mockResolvedValueOnce(mockFetchResponse({ snapshot_id: "s2" }));
+
+    await removeTracksFromPlaylist("test-token", "pl-1", uris);
+
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(fetchMock.mock.calls[0]![1]!.body);
+    const secondBody = JSON.parse(fetchMock.mock.calls[1]![1]!.body);
+    expect(firstBody.tracks).toHaveLength(100);
+    expect(secondBody.tracks).toHaveLength(50);
+  });
+
+  it("throws on non-2xx error", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      mockFetchResponse(null, 500)
+    );
+
+    await expect(
+      removeTracksFromPlaylist("test-token", "pl-1", ["spotify:track:a"])
     ).rejects.toThrow("Spotify API error: 500");
   });
 });

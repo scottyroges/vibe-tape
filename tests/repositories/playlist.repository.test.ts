@@ -307,6 +307,40 @@ describe("playlistRepository", () => {
     });
   });
 
+  describe("removeTrack", () => {
+    it("updates both generatedTrackIds and trackScores in a single .set()", async () => {
+      execute.mockResolvedValue([]);
+
+      await playlistRepository.removeTrack("p1", "track-to-remove");
+
+      expect(updateTable).toHaveBeenCalledWith("playlist");
+      expect(where).toHaveBeenCalledWith("id", "=", "p1");
+
+      // Both fields must be written in the same UPDATE so they can't
+      // drift out of alignment.
+      const setCall = set.mock.calls[0]![0] as Record<string, unknown>;
+      expect(setCall).toHaveProperty("generatedTrackIds");
+      expect(setCall).toHaveProperty("trackScores");
+      expect(setCall).toHaveProperty("updatedAt");
+
+      // Both values go through a Kysely raw `sql` fragment (array_remove
+      // for the id list, a jsonb_agg subquery for the scores) — they
+      // must NOT be plain JS arrays, otherwise node-postgres would
+      // serialize them as PG text arrays and jsonb writes would break.
+      // Same class of bug as #54.
+      expect(Array.isArray(setCall.generatedTrackIds)).toBe(false);
+      expect(
+        typeof (setCall.generatedTrackIds as { toOperationNode?: unknown })
+          ?.toOperationNode,
+      ).toBe("function");
+      expect(Array.isArray(setCall.trackScores)).toBe(false);
+      expect(
+        typeof (setCall.trackScores as { toOperationNode?: unknown })
+          ?.toOperationNode,
+      ).toBe("function");
+    });
+  });
+
   describe("findByIdWithRecipe", () => {
     it("returns the domain playlist with recipe fields", async () => {
       executeTakeFirst.mockResolvedValue(baseRow);
