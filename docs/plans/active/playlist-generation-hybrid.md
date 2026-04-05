@@ -1256,9 +1256,11 @@ polling cap unsticks the UI even if the TTL ever misfires.
 
 ## Phases (PR splits)
 
-- **PR A — Scoring pure function + math target.** `src/lib/playlist-scoring.ts`
-  with `computeMathTarget`, `scoreTrack`, `rankAndFilter`.
-  Pure, tested in isolation against a fixture library. No DB, no Inngest.
+- **PR A — Scoring pure function + math target.** ✅ Shipped.
+  `src/lib/playlist-scoring.ts` with `computeMathTarget`, `scoreTrack`,
+  `rankAndFilter`, and `MAX_PLAYLIST_TRACKS = 100`. Pure, tested in
+  isolation at `tests/lib/playlist-scoring.test.ts`. No DB, no Inngest,
+  no tRPC.
 - **PR B — Claude target prompt + validation.** First: extract
   `normalizeClaudeMood` from `sync-library.ts` into
   `src/lib/prompts/canonical-mood.ts` (behavior-preserving refactor)
