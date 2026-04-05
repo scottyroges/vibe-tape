@@ -1,8 +1,12 @@
 # Liked Songs Ingestion + Storage
 
+> **Historical note (2026-04-04):** Mentions of Vercel, Inngest Cloud, and
+> production deployment are stale — the project is now local-only. See
+> [ADR 010](../../decisions/010-personal-use-only.md).
+
 **Status:** Complete (all 5 phases done)
 **Created:** 2026-03-21
-**Goal:** Fetch a user's liked songs from Spotify, store them in the database, and expose a manual sync action via tRPC so the dashboard can trigger ingestion. Sync runs as a background job via Inngest to avoid Vercel function timeouts.
+**Goal:** Fetch a user's liked songs from Spotify, store them in the database, and expose a manual sync action via tRPC so the dashboard can trigger ingestion. Sync runs as a background job via Inngest.
 
 **Current state (2026-03-21):** All phases implemented and merged to main. Inngest is deployed to production via Vercel integration. The `INNGEST_SERVE_ORIGIN` env var is set for production; manual sync was required to get the initial app registered in Inngest Cloud.
 

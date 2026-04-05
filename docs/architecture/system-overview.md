@@ -18,13 +18,14 @@ All business logic lives in `src/services/` with zero framework dependencies. Ro
 
 The type chain: Prisma schema → Kysely database types (via `prisma-kysely`) → domain types → tRPC procedures → frontend. Changing a field in the schema produces compile errors everywhere that field is referenced. Runtime validation via Zod at API boundaries.
 
-### Scale Later, Architect Now
+### Portable by Default
 
-Decisions keep scaling options open without paying the complexity cost upfront:
-- Service layer pattern enables future service extraction
-- Neon Postgres is just Postgres — can migrate to any provider
-- Cloudflare R2 is S3-compatible — can swap to AWS S3
-- No vendor-specific features that create deep lock-in
+Even though Vibe Tape is personal-use only ([ADR 010](../decisions/010-personal-use-only.md)),
+we still avoid vendor-specific features so the architecture stays easy to
+reason about:
+- Service layer pattern isolates business logic from framework code
+- Postgres (local, via Docker Compose) — plain SQL, no cloud-specific extensions
+- No lock-in to any hosted provider
 
 ## Project Structure
 

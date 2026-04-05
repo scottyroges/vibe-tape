@@ -1,5 +1,11 @@
 # Track Enrichment Pipeline
 
+> **Historical note (2026-04-04):** This plan was written when Vibe Tape was
+> targeting a Vercel deployment. The "Vercel Timeout Constraint" section and
+> references to the 60s function limit no longer apply — the project is now
+> local-only ([ADR 010](../../decisions/010-personal-use-only.md)). The
+> chunked step pattern has been retained for retry granularity.
+
 **Status:** Complete
 **Created:** 2026-03-21
 **Goal:** After library sync, enrich tracks with metadata from multiple sources (Spotify, Last.fm, Claude) to enable vibe-based playlist generation. The pipeline should be extensible — easy to add new data sources and re-enrich when sources or prompts improve.

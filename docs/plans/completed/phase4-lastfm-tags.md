@@ -1,5 +1,10 @@
 # Plan: Phase 4 — Last.fm Tags
 
+> **Historical note (2026-04-04):** `LASTFM_CHUNK_SIZE` was sized against
+> Vercel's 60s function timeout. That constraint no longer applies — see
+> [ADR 010](../../decisions/010-personal-use-only.md). The chunk size is
+> still reasonable for retry granularity, so it's unchanged.
+
 **Status:** Complete
 **Created:** 2026-03-22
 
