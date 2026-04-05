@@ -13,4 +13,4 @@ export type {
   ArtistSpotifyEnrichment,
   ArtistLastfmEnrichment,
 } from "./song";
-export type { Playlist } from "./playlist";
+export type { Playlist, TrackScore } from "./playlist";

@@ -91,7 +91,14 @@ function makePlaylist(
     errorMessage?: string | null;
     vibeName?: string;
     userIntent?: string | null;
-    tracks?: { id: string; name: string; artistsDisplay: string }[];
+    tracks?: {
+      id: string;
+      name: string;
+      artistsDisplay: string;
+      claudeScore?: number | null;
+      mathScore?: number | null;
+      finalScore?: number | null;
+    }[];
     seeds?: { id: string; name: string; artistsDisplay: string }[];
   } = {}
 ) {
@@ -109,6 +116,12 @@ function makePlaylist(
     vibeUpdatedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    // Scores default to `null` — matches the router response for
+    // legacy rows that pre-date the `trackScores` column. Tests
+    // exercising the score display override these explicitly.
+    claudeScore: t.claudeScore ?? null,
+    mathScore: t.mathScore ?? null,
+    finalScore: t.finalScore ?? null,
   }));
   const seeds = (overrides.seeds ?? [{ id: "s1", name: "Seed A", artistsDisplay: "Artist" }]).map((t) => ({
     ...t,
@@ -350,5 +363,48 @@ describe("PlaylistDetailPage", () => {
     expect(screen.getByText("Gen One")).toBeInTheDocument();
     expect(screen.getByText("Gen Two")).toBeInTheDocument();
     expect(screen.getByText("Seed One")).toBeInTheDocument();
+  });
+
+  it("renders per-track score triples on generated tracks", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        tracks: [
+          {
+            id: "g1",
+            name: "Scored Track",
+            artistsDisplay: "The Band",
+            claudeScore: 0.81,
+            mathScore: 0.72,
+            finalScore: 0.765,
+          },
+        ],
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Scored Track");
+    // Final score rendered with 2 decimals (rounds 0.765 → 0.77 via toFixed).
+    expect(screen.getByText("0.77")).toBeInTheDocument();
+    // Claude + math breakdown shows the raw per-component numbers.
+    expect(screen.getByText(/C 0\.81/)).toBeInTheDocument();
+    expect(screen.getByText(/M 0\.72/)).toBeInTheDocument();
+  });
+
+  it("omits the score cell when the track has no persisted scores", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        tracks: [
+          { id: "g1", name: "Legacy Track", artistsDisplay: "The Band" },
+        ],
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByText("Legacy Track");
+    // No `C 0.xx` / `M 0.xx` text anywhere for a row without scores.
+    expect(screen.queryByText(/C 0\./)).not.toBeInTheDocument();
+    expect(screen.queryByText(/M 0\./)).not.toBeInTheDocument();
   });
 });

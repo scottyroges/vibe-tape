@@ -229,6 +229,23 @@ describe("generatePlaylist", () => {
     for (const id of ["s1", "s2", "s3"]) {
       expect(args.generatedTrackIds).toContain(id);
     }
+    // Track scores are persisted in the same write, aligned 1:1 with
+    // `generatedTrackIds`, so the detail page can show claude/math/final
+    // per row without re-scoring.
+    expect(args.trackScores).toHaveLength(args.generatedTrackIds.length);
+    expect(args.trackScores[0]).toEqual(
+      expect.objectContaining({
+        trackId: expect.any(String),
+        claude: expect.any(Number),
+        math: expect.any(Number),
+        final: expect.any(Number),
+      }),
+    );
+    // Score order matches the generatedTrackIds order — the render
+    // layer relies on positional alignment.
+    for (let i = 0; i < args.generatedTrackIds.length; i++) {
+      expect(args.trackScores[i].trackId).toBe(args.generatedTrackIds[i]);
+    }
   });
 
   it("threads userIntent into the Claude prompt", async () => {

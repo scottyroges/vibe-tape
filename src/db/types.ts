@@ -56,6 +56,7 @@ export type Playlist = {
     seedSongIds: string[];
     status: Generated<PlaylistStatus>;
     generatedTrackIds: Generated<string[]>;
+    trackScores: unknown | null;
     targetDurationMinutes: Generated<number>;
     userIntent: string | null;
     claudeTarget: unknown | null;

@@ -89,11 +89,21 @@ export const regeneratePlaylist = inngest.createFunction(
       requiredTrackIds: playlist.seedSongIds,
     });
     const finalTrackIds = final.map((s) => s.trackId);
+    const finalTrackScores = final.map((s) => ({
+      trackId: s.trackId,
+      claude: s.claudeScore,
+      math: s.mathScore,
+      final: s.finalScore,
+    }));
 
-    // 4. Persist new track list. `updateTracks` only touches
-    //    `generatedTrackIds` — recipe fields stay intact.
+    // 4. Persist new track list + scores. `updateTracks` replaces both
+    //    atomically — recipe fields stay intact.
     await step.run("save-playlist", async () => {
-      await playlistRepository.updateTracks(playlistId, finalTrackIds);
+      await playlistRepository.updateTracks(
+        playlistId,
+        finalTrackIds,
+        finalTrackScores,
+      );
     });
 
     // 5. If already on Spotify, replace the live track list.

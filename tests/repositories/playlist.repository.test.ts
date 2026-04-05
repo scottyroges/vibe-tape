@@ -145,18 +145,27 @@ describe("playlistRepository", () => {
         tags: [],
       };
 
+      const trackScores = [
+        { trackId: "t1", claude: 0.8, math: 0.7, final: 0.75 },
+        { trackId: "t2", claude: 0.6, math: 0.6, final: 0.6 },
+        { trackId: "t3", claude: 0.9, math: 0.5, final: 0.7 },
+      ];
+
       await playlistRepository.completeGeneration("p1", {
         vibeName: "Night Drive",
         vibeDescription: "late-night cruising",
         claudeTarget,
         mathTarget,
         generatedTrackIds: ["t1", "t2", "t3"],
+        trackScores,
       });
 
       expect(updateTable).toHaveBeenCalledWith("playlist");
       expect(where).toHaveBeenCalledWith("id", "=", "p1");
       // Load-bearing: all recipe fields + status flip happen in the
-      // same .set() so the row never ends up half-populated.
+      // same .set() so the row never ends up half-populated. Scores
+      // are part of the same write so they can't drift out of sync
+      // with `generatedTrackIds`.
       expect(set).toHaveBeenCalledWith(
         expect.objectContaining({
           vibeName: "Night Drive",
@@ -164,6 +173,7 @@ describe("playlistRepository", () => {
           claudeTarget,
           mathTarget,
           generatedTrackIds: ["t1", "t2", "t3"],
+          trackScores,
           status: "PENDING",
         })
       );
@@ -171,13 +181,24 @@ describe("playlistRepository", () => {
   });
 
   describe("updateTracks", () => {
-    it("full-replaces generatedTrackIds", async () => {
+    it("full-replaces generatedTrackIds and trackScores together", async () => {
       execute.mockResolvedValue([]);
 
-      await playlistRepository.updateTracks("p1", ["t9", "t8"]);
+      const trackScores = [
+        { trackId: "t9", claude: 0.5, math: 0.5, final: 0.5 },
+        { trackId: "t8", claude: 0.4, math: 0.6, final: 0.5 },
+      ];
+
+      await playlistRepository.updateTracks("p1", ["t9", "t8"], trackScores);
 
       expect(updateTable).toHaveBeenCalledWith("playlist");
       expect(where).toHaveBeenCalledWith("id", "=", "p1");
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generatedTrackIds: ["t9", "t8"],
+          trackScores,
+        })
+      );
     });
   });
 
@@ -185,13 +206,20 @@ describe("playlistRepository", () => {
     it("issues an update using array_cat for non-empty input", async () => {
       execute.mockResolvedValue([]);
 
-      await playlistRepository.appendTracks("p1", ["t10", "t11"]);
+      await playlistRepository.appendTracks(
+        "p1",
+        ["t10", "t11"],
+        [
+          { trackId: "t10", claude: 0.3, math: 0.7, final: 0.5 },
+          { trackId: "t11", claude: 0.4, math: 0.8, final: 0.6 },
+        ],
+      );
 
       expect(updateTable).toHaveBeenCalledWith("playlist");
     });
 
     it("is a no-op on empty input", async () => {
-      await playlistRepository.appendTracks("p1", []);
+      await playlistRepository.appendTracks("p1", [], []);
 
       expect(updateTable).not.toHaveBeenCalled();
     });

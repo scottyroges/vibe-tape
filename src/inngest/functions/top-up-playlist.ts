@@ -151,10 +151,22 @@ export const topUpPlaylist = inngest.createFunction(
       initialArtistCounts,
     });
     const additionIds = additions.map((s) => s.trackId);
+    const additionScores = additions.map((s) => ({
+      trackId: s.trackId,
+      claude: s.claudeScore,
+      math: s.mathScore,
+      final: s.finalScore,
+    }));
 
-    // 4. Append to the DB row (existing order untouched).
+    // 4. Append to the DB row (existing order untouched). Scores are
+    //    concatenated onto the existing `trackScores` array so the
+    //    triples stay aligned with `generatedTrackIds`.
     await step.run("append-tracks", async () => {
-      await playlistRepository.appendTracks(playlistId, additionIds);
+      await playlistRepository.appendTracks(
+        playlistId,
+        additionIds,
+        additionScores,
+      );
     });
 
     // 5. If on Spotify, append the new URIs only (not the full list).

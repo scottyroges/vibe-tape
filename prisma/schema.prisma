@@ -231,6 +231,7 @@ model Playlist {
   seedSongIds           String[]       @map("seed_song_ids")
   status                PlaylistStatus @default(GENERATING)
   generatedTrackIds     String[]       @default([]) @map("generated_track_ids")
+  trackScores           Json?          @map("track_scores")
   targetDurationMinutes Int            @default(60) @map("target_duration_minutes")
   userIntent            String?        @map("user_intent")
   claudeTarget          Json?          @map("claude_target")
