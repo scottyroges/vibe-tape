@@ -1321,8 +1321,24 @@ polling cap unsticks the UI even if the TTL ever misfires.
   Tests in `tests/lib/spotify.test.ts` mock `global.fetch` and cover
   URL/body/headers, the empty-URI no-op, >100 URI batching, and the
   replace path.
-- **PR E — Generate Inngest function + `playlist.generate` tRPC.** Just
-  the first-run flow, ending at `PENDING`. No save/regen/top-up yet.
+- **PR E — Generate Inngest function + `playlist.generate` tRPC.**
+  Implemented on `feat/playlist-pr-e-generate-flow`. `playlist.generate`
+  validates seed ownership (via a new
+  `trackRepository.findOwnedTrackIds`), inserts a `GENERATING`
+  placeholder, and fires `playlist/generate.requested`. The
+  `generate-playlist` Inngest function (concurrency keyed on
+  `event.data.playlistId`) runs load-seeds → compute-math-target →
+  claude-target → score-library → save-playlist, then flips the row
+  to `PENDING`; `onFailure` flips to `FAILED` with a generic message.
+  One drift from the sketch: `load-seeds` fetches both scoring and
+  display shapes in parallel because the Claude prompt needs the
+  artist-name string (`artistsDisplay`), which
+  `findByIdsWithScoringFields` doesn't expose. `scoreLibrary` lives at
+  `src/inngest/helpers/score-library.ts` and uses `computeFinalScore`
+  (not a hand-rolled `(a+b)/2`) so the PR A degenerate-target fallback
+  is preserved across generate/regenerate/top-up.
+  `computePerArtistCap` is colocated with the generate function for
+  now — promote to `@/lib/playlist-scoring` if PR G wants to reuse it.
 - **PR F — Save/discard flow.** `playlist.save` (inline tRPC) and
   `playlist.discard`. Playlist detail page in PENDING state with Save/
   Discard/Regenerate buttons. Shipping this gets the user from seeds to
