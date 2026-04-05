@@ -217,6 +217,22 @@ describe("playlistRepository", () => {
     });
   });
 
+  describe("setStatus", () => {
+    it("flips status without touching spotifyPlaylistId", async () => {
+      execute.mockResolvedValue([]);
+
+      await playlistRepository.setStatus("p1", "GENERATING");
+
+      expect(updateTable).toHaveBeenCalledWith("playlist");
+      expect(where).toHaveBeenCalledWith("id", "=", "p1");
+      // Load-bearing: must NOT touch spotifyPlaylistId — markSaved is
+      // still the sole writer of that column paired with SAVED.
+      const setArgs = set.mock.calls.at(-1)?.[0];
+      expect(setArgs).toMatchObject({ status: "GENERATING" });
+      expect(setArgs).not.toHaveProperty("spotifyPlaylistId");
+    });
+  });
+
   describe("setFailed", () => {
     it("flips status to FAILED and records error message in the same .set()", async () => {
       execute.mockResolvedValue([]);

@@ -9,6 +9,7 @@ const {
   mockFindByIdWithTracks,
   mockMarkSaved,
   mockDeletePlaylist,
+  mockSetStatus,
   mockGetValidToken,
   mockCreateSpotifyPlaylist,
   mockAddTracksToPlaylist,
@@ -21,6 +22,7 @@ const {
   mockFindByIdWithTracks: vi.fn(),
   mockMarkSaved: vi.fn(),
   mockDeletePlaylist: vi.fn(),
+  mockSetStatus: vi.fn(),
   mockGetValidToken: vi.fn(),
   mockCreateSpotifyPlaylist: vi.fn(),
   mockAddTracksToPlaylist: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock("@/repositories/playlist.repository", () => ({
     findByIdWithTracks: mockFindByIdWithTracks,
     markSaved: mockMarkSaved,
     delete: mockDeletePlaylist,
+    setStatus: mockSetStatus,
   },
 }));
 
@@ -602,5 +605,136 @@ describe("playlistRouter.discard", () => {
       caller.playlist.discard({ playlistId: "pl-1" })
     ).rejects.toThrow();
     expect(mockDeletePlaylist).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// regenerate / topUp (PR G)
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("playlistRouter.regenerate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSetStatus.mockResolvedValue(undefined);
+  });
+
+  it("flips PENDING → GENERATING and fires the regenerate event", async () => {
+    mockFindById.mockResolvedValue(makePlaylist({ status: "PENDING" }));
+
+    const caller = authedCaller();
+    const result = await caller.playlist.regenerate({ playlistId: "pl-1" });
+
+    expect(result).toEqual({ playlistId: "pl-1" });
+    expect(mockSetStatus).toHaveBeenCalledWith("pl-1", "GENERATING");
+    expect(mockSend).toHaveBeenCalledWith({
+      name: "playlist/regenerate.requested",
+      data: {
+        userId: "user-1",
+        playlistId: "pl-1",
+        priorStatus: "PENDING",
+      },
+    });
+  });
+
+  it("threads priorStatus=SAVED through when the playlist was saved", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({ status: "SAVED", spotifyPlaylistId: "sp-x" })
+    );
+
+    const caller = authedCaller();
+    await caller.playlist.regenerate({ playlistId: "pl-1" });
+
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ priorStatus: "SAVED" }),
+      })
+    );
+  });
+
+  it("rejects a GENERATING playlist with BAD_REQUEST", async () => {
+    mockFindById.mockResolvedValue(makePlaylist({ status: "GENERATING" }));
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.regenerate({ playlistId: "pl-1" })
+    ).rejects.toThrow(/GENERATING/);
+    expect(mockSetStatus).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("rejects a FAILED playlist with BAD_REQUEST", async () => {
+    mockFindById.mockResolvedValue(makePlaylist({ status: "FAILED" }));
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.regenerate({ playlistId: "pl-1" })
+    ).rejects.toThrow();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("rejects a playlist owned by another user with NOT_FOUND", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({ userId: "someone-else", status: "PENDING" })
+    );
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.regenerate({ playlistId: "pl-1" })
+    ).rejects.toThrow();
+    expect(mockSetStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("playlistRouter.topUp", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSetStatus.mockResolvedValue(undefined);
+  });
+
+  it("flips PENDING → GENERATING and fires the top-up event", async () => {
+    mockFindById.mockResolvedValue(makePlaylist({ status: "PENDING" }));
+
+    const caller = authedCaller();
+    const result = await caller.playlist.topUp({ playlistId: "pl-1" });
+
+    expect(result).toEqual({ playlistId: "pl-1" });
+    expect(mockSetStatus).toHaveBeenCalledWith("pl-1", "GENERATING");
+    expect(mockSend).toHaveBeenCalledWith({
+      name: "playlist/top-up.requested",
+      data: {
+        userId: "user-1",
+        playlistId: "pl-1",
+        priorStatus: "PENDING",
+      },
+    });
+  });
+
+  it("threads priorStatus=SAVED through when the playlist was saved", async () => {
+    mockFindById.mockResolvedValue(
+      makePlaylist({ status: "SAVED", spotifyPlaylistId: "sp-x" })
+    );
+    const caller = authedCaller();
+    await caller.playlist.topUp({ playlistId: "pl-1" });
+
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ priorStatus: "SAVED" }),
+      })
+    );
+  });
+
+  it("rejects a GENERATING playlist with BAD_REQUEST", async () => {
+    mockFindById.mockResolvedValue(makePlaylist({ status: "GENERATING" }));
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.topUp({ playlistId: "pl-1" })
+    ).rejects.toThrow();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("rejects a FAILED playlist with BAD_REQUEST", async () => {
+    mockFindById.mockResolvedValue(makePlaylist({ status: "FAILED" }));
+    const caller = authedCaller();
+    await expect(
+      caller.playlist.topUp({ playlistId: "pl-1" })
+    ).rejects.toThrow();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

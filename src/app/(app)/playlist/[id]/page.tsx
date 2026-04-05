@@ -89,6 +89,33 @@ export default function PlaylistDetailPage() {
     })
   );
 
+  // Regenerate and top-up both flip the row to GENERATING server-side,
+  // so invalidating `getById` on success picks that up and the existing
+  // polling loop kicks in — same UX path as the initial generate.
+  const regenerateMutation = useMutation(
+    trpc.playlist.regenerate.mutationOptions({
+      onSuccess: () => {
+        pollCountRef.current = 0;
+        setPollingCapped(false);
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.getById.queryKey({ id: playlistId }),
+        });
+      },
+    })
+  );
+
+  const topUpMutation = useMutation(
+    trpc.playlist.topUp.mutationOptions({
+      onSuccess: () => {
+        pollCountRef.current = 0;
+        setPollingCapped(false);
+        queryClient.invalidateQueries({
+          queryKey: trpc.playlist.getById.queryKey({ id: playlistId }),
+        });
+      },
+    })
+  );
+
   if (playlistQuery.isLoading) {
     return (
       <div className={styles.container}>
@@ -220,24 +247,26 @@ export default function PlaylistDetailPage() {
             Open in Spotify
           </a>
         )}
-        {/* Regenerate + Add more ship in PR G. Buttons are rendered
-            disabled so the layout is stable; PR G wires the onClick. */}
         <button
           type="button"
           className={styles.secondaryButton}
-          disabled
-          title="Coming soon"
+          onClick={() => regenerateMutation.mutate({ playlistId })}
+          disabled={
+            regenerateMutation.isPending || topUpMutation.isPending
+          }
         >
-          Regenerate
+          {regenerateMutation.isPending ? "Regenerating…" : "Regenerate"}
         </button>
         {status === "SAVED" && (
           <button
             type="button"
             className={styles.secondaryButton}
-            disabled
-            title="Coming soon"
+            onClick={() => topUpMutation.mutate({ playlistId })}
+            disabled={
+              topUpMutation.isPending || regenerateMutation.isPending
+            }
           >
-            Add more
+            {topUpMutation.isPending ? "Adding…" : "Add more"}
           </button>
         )}
         {status === "PENDING" && (

@@ -235,6 +235,81 @@ export const playlistRouter = router({
     }),
 
   /**
+   * Regenerate an existing `PENDING` or `SAVED` playlist against its
+   * stored recipe. Flips the row to `GENERATING` so the detail page
+   * shows the spinner, then fires `playlist/regenerate.requested`; the
+   * Inngest function re-scores the library, replaces `generatedTrackIds`,
+   * syncs Spotify if the playlist was `SAVED`, and restores the prior
+   * status. Recipe fields (vibeName, targets, seeds, targetDuration,
+   * userIntent) are not touched.
+   */
+  regenerate: protectedProcedure
+    .input(z.object({ playlistId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const playlist = await playlistRepository.findById(input.playlistId);
+      if (!playlist || playlist.userId !== ctx.userId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (playlist.status !== "PENDING" && playlist.status !== "SAVED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot regenerate playlist in status ${playlist.status}; expected PENDING or SAVED`,
+        });
+      }
+
+      const priorStatus = playlist.status;
+      await playlistRepository.setStatus(input.playlistId, "GENERATING");
+
+      await inngest.send({
+        name: "playlist/regenerate.requested",
+        data: {
+          userId: ctx.userId,
+          playlistId: input.playlistId,
+          priorStatus,
+        },
+      });
+
+      return { playlistId: input.playlistId };
+    }),
+
+  /**
+   * Top up an existing `PENDING` or `SAVED` playlist with additional
+   * tracks. Flips the row to `GENERATING` (same spinner UX as regenerate),
+   * then fires `playlist/top-up.requested`; the Inngest function appends
+   * new matches, appends to Spotify if the playlist was `SAVED`, and
+   * restores the prior status. Existing tracks and their order are
+   * preserved.
+   */
+  topUp: protectedProcedure
+    .input(z.object({ playlistId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const playlist = await playlistRepository.findById(input.playlistId);
+      if (!playlist || playlist.userId !== ctx.userId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (playlist.status !== "PENDING" && playlist.status !== "SAVED") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot top up playlist in status ${playlist.status}; expected PENDING or SAVED`,
+        });
+      }
+
+      const priorStatus = playlist.status;
+      await playlistRepository.setStatus(input.playlistId, "GENERATING");
+
+      await inngest.send({
+        name: "playlist/top-up.requested",
+        data: {
+          userId: ctx.userId,
+          playlistId: input.playlistId,
+          priorStatus,
+        },
+      });
+
+      return { playlistId: input.playlistId };
+    }),
+
+  /**
    * Delete a non-`SAVED` playlist row. `SAVED` playlists are kept
    * because they've been pushed to Spotify — deleting them is a
    * separate flow if we ever build one.

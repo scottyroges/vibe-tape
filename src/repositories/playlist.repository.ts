@@ -189,6 +189,31 @@ export const playlistRepository = {
   },
 
   /**
+   * Flips status without touching `spotifyPlaylistId`. Used by the
+   * regenerate/top-up lifecycle to drive the transient
+   * `PENDING/SAVED → GENERATING → PENDING/SAVED` transitions that power
+   * the detail-page spinner.
+   *
+   * **Invariant note.** `markSaved` is still the sole writer of the
+   * `status ↔ spotifyPlaylistId` pair — this method only flips `status`
+   * and relies on callers (regenerate/top-up) to only pass `SAVED`
+   * when the row already has a `spotifyPlaylistId` set from a prior
+   * save. The only legal inputs are the three lifecycle statuses
+   * below; `FAILED` goes through `setFailed` (which also stores the
+   * error message).
+   */
+  async setStatus(
+    playlistId: string,
+    status: "GENERATING" | "PENDING" | "SAVED"
+  ): Promise<void> {
+    await db
+      .updateTable("playlist")
+      .set({ status, updatedAt: new Date() })
+      .where("id", "=", playlistId)
+      .execute();
+  },
+
+  /**
    * Flips status to `FAILED` and stores an error message. Called by
    * `onFailure` handlers on the Inngest functions.
    */
