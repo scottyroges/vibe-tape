@@ -7,7 +7,22 @@ import {
   SPOTIFY_ENRICHMENT_VERSION,
   CLAUDE_ENRICHMENT_VERSION,
   LASTFM_ENRICHMENT_VERSION,
+  VIBE_DERIVATION_VERSION,
 } from "@/lib/enrichment";
+
+export type StaleVibeProfileRow = {
+  id: string;
+  artistNames: string[];
+  claude: {
+    mood: string | null;
+    energy: string | null;
+    danceability: string | null;
+    vibeTags: string[];
+  } | null;
+  trackSpotify: { derivedEra: string | null } | null;
+  trackLastfm: { tags: string[] } | null;
+  artistLastfmTags: string[];
+};
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -222,6 +237,196 @@ export const trackRepository = {
           .execute();
       }
     });
+  },
+
+  /**
+   * Returns tracks whose vibe profile is stale and needs re-derivation,
+   * with all data `deriveVibeProfile()` needs already joined and shaped.
+   *
+   * Implemented as two queries + a JS zip. Query 1 pulls stale tracks with
+   * 1:1 enrichment data and aggregated artist names. Query 2 fetches artist
+   * Last.fm tag rows for the matched track IDs in deterministic
+   * (trackId, position) order. The two are merged in JS — simpler than
+   * cramming everything into a single query with array_agg across multiple
+   * joined tables.
+   */
+  async findStaleVibeProfiles(
+    version: number,
+    limit: number
+  ): Promise<StaleVibeProfileRow[]> {
+    // Query 1: stale tracks + 1:1 enrichments + artist names
+    const rows = await db
+      .selectFrom("track")
+      .innerJoin("trackArtist", "trackArtist.trackId", "track.id")
+      .innerJoin("artist", "artist.id", "trackArtist.artistId")
+      .leftJoin(
+        "trackSpotifyEnrichment",
+        "trackSpotifyEnrichment.trackId",
+        "track.id"
+      )
+      .leftJoin(
+        "trackClaudeEnrichment",
+        "trackClaudeEnrichment.trackId",
+        "track.id"
+      )
+      .leftJoin(
+        "trackLastfmEnrichment",
+        "trackLastfmEnrichment.trackId",
+        "track.id"
+      )
+      .where((eb) =>
+        eb.or([
+          eb("track.vibeUpdatedAt", "is", null),
+          eb("track.vibeVersion", "<", version),
+          eb(
+            "trackSpotifyEnrichment.enrichedAt",
+            ">",
+            eb.ref("track.vibeUpdatedAt")
+          ),
+          eb(
+            "trackClaudeEnrichment.enrichedAt",
+            ">",
+            eb.ref("track.vibeUpdatedAt")
+          ),
+          eb(
+            "trackLastfmEnrichment.enrichedAt",
+            ">",
+            eb.ref("track.vibeUpdatedAt")
+          ),
+        ])
+      )
+      .select([
+        "track.id",
+        sql<
+          string[]
+        >`array_agg(artist.name ORDER BY track_artist.position)`.as(
+          "artistNames"
+        ),
+        "trackSpotifyEnrichment.derivedEra",
+        "trackClaudeEnrichment.mood as claudeMood",
+        "trackClaudeEnrichment.energy as claudeEnergy",
+        "trackClaudeEnrichment.danceability as claudeDanceability",
+        "trackClaudeEnrichment.vibeTags as claudeVibeTags",
+        "trackLastfmEnrichment.tags as trackLastfmTags",
+      ])
+      .groupBy([
+        "track.id",
+        "trackSpotifyEnrichment.derivedEra",
+        "trackClaudeEnrichment.mood",
+        "trackClaudeEnrichment.energy",
+        "trackClaudeEnrichment.danceability",
+        "trackClaudeEnrichment.vibeTags",
+        "trackLastfmEnrichment.tags",
+      ])
+      .limit(limit)
+      .execute();
+
+    if (rows.length === 0) return [];
+
+    // Query 2: artist Last.fm tags for the matched tracks, ordered by
+    // (trackId, position) for deterministic per-artist ordering
+    const trackIds = rows.map((r) => r.id);
+    const tagRows = await db
+      .selectFrom("trackArtist")
+      .leftJoin(
+        "artistLastfmEnrichment",
+        "artistLastfmEnrichment.artistId",
+        "trackArtist.artistId"
+      )
+      .where("trackArtist.trackId", "in", trackIds)
+      .select([
+        "trackArtist.trackId",
+        "trackArtist.position",
+        "artistLastfmEnrichment.tags",
+      ])
+      .orderBy("trackArtist.trackId")
+      .orderBy("trackArtist.position")
+      .execute();
+
+    // Zip artist tags into a map keyed by trackId
+    const artistTagsByTrack = new Map<string, string[]>();
+    for (const row of tagRows) {
+      if (!row.tags || row.tags.length === 0) continue;
+      const existing = artistTagsByTrack.get(row.trackId) ?? [];
+      existing.push(...row.tags);
+      artistTagsByTrack.set(row.trackId, existing);
+    }
+
+    // Shape the final result
+    return rows.map((row) => ({
+      id: row.id,
+      artistNames: row.artistNames ?? [],
+      claude:
+        row.claudeMood === null && row.claudeEnergy === null
+          ? null
+          : {
+              mood: row.claudeMood,
+              energy: row.claudeEnergy,
+              danceability: row.claudeDanceability,
+              vibeTags: row.claudeVibeTags ?? [],
+            },
+      trackSpotify:
+        row.derivedEra === null ? null : { derivedEra: row.derivedEra },
+      trackLastfm:
+        row.trackLastfmTags === null ? null : { tags: row.trackLastfmTags },
+      artistLastfmTags: artistTagsByTrack.get(row.id) ?? [],
+    }));
+  },
+
+  async updateVibeProfiles(
+    updates: {
+      id: string;
+      mood: string | null;
+      energy: string | null;
+      danceability: string | null;
+      genres: string[];
+      tags: string[];
+    }[]
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    await db.transaction().execute(async (trx) => {
+      const now = new Date();
+      for (const { id, mood, energy, danceability, genres, tags } of updates) {
+        await trx
+          .updateTable("track")
+          .set({
+            vibeMood: mood,
+            vibeEnergy: energy,
+            vibeDanceability: danceability,
+            vibeGenres: genres,
+            vibeTags: tags,
+            vibeVersion: VIBE_DERIVATION_VERSION,
+            vibeUpdatedAt: now,
+          })
+          .where("id", "=", id)
+          .execute();
+      }
+    });
+  },
+
+  /**
+   * Bulk-sets `vibeUpdatedAt = NULL` on every track linked to any of the
+   * given artists via `track_artist`. Called by `enrich-lastfm` immediately
+   * after writing artist tags so the downstream derive step re-derives
+   * affected tracks.
+   *
+   * Idempotent on already-null rows (UPDATE … SET vibe_updated_at = NULL
+   * WHERE … is a no-op when the column is already NULL).
+   */
+  async invalidateVibeProfilesByArtist(artistIds: string[]): Promise<void> {
+    if (artistIds.length === 0) return;
+    await db
+      .updateTable("track")
+      .set({ vibeUpdatedAt: null })
+      .where(
+        "id",
+        "in",
+        db
+          .selectFrom("trackArtist")
+          .select("trackId")
+          .where("artistId", "in", artistIds)
+      )
+      .execute();
   },
 
   async setEnrichmentVersion(

@@ -5,7 +5,10 @@ const {
   mockArtistUpdateLastfmTags,
   mockArtistSetEnrichmentVersion,
   mockTrackFindStaleWithPrimaryArtist,
+  mockTrackFindStaleVibeProfiles,
   mockTrackUpdateLastfmTags,
+  mockTrackUpdateVibeProfiles,
+  mockTrackInvalidateVibeProfilesByArtist,
   mockTrackSetEnrichmentVersion,
   mockGetArtistTopTags,
   mockGetTrackTopTags,
@@ -14,7 +17,10 @@ const {
   mockArtistUpdateLastfmTags: vi.fn(),
   mockArtistSetEnrichmentVersion: vi.fn(),
   mockTrackFindStaleWithPrimaryArtist: vi.fn(),
+  mockTrackFindStaleVibeProfiles: vi.fn(),
   mockTrackUpdateLastfmTags: vi.fn(),
+  mockTrackUpdateVibeProfiles: vi.fn(),
+  mockTrackInvalidateVibeProfilesByArtist: vi.fn(),
   mockTrackSetEnrichmentVersion: vi.fn(),
   mockGetArtistTopTags: vi.fn(),
   mockGetTrackTopTags: vi.fn(),
@@ -27,6 +33,7 @@ vi.mock("@/lib/lastfm", () => ({
 
 vi.mock("@/lib/enrichment", () => ({
   LASTFM_ENRICHMENT_VERSION: 1,
+  VIBE_DERIVATION_VERSION: 1,
 }));
 
 vi.mock("@/repositories/artist.repository", () => ({
@@ -40,7 +47,10 @@ vi.mock("@/repositories/artist.repository", () => ({
 vi.mock("@/repositories/track.repository", () => ({
   trackRepository: {
     findStaleWithPrimaryArtist: mockTrackFindStaleWithPrimaryArtist,
+    findStaleVibeProfiles: mockTrackFindStaleVibeProfiles,
     updateLastfmTags: mockTrackUpdateLastfmTags,
+    updateVibeProfiles: mockTrackUpdateVibeProfiles,
+    invalidateVibeProfilesByArtist: mockTrackInvalidateVibeProfilesByArtist,
     setEnrichmentVersion: mockTrackSetEnrichmentVersion,
   },
 }));
@@ -70,7 +80,10 @@ function setupDefaultMocks() {
   mockArtistUpdateLastfmTags.mockResolvedValue(undefined);
   mockArtistSetEnrichmentVersion.mockResolvedValue(0);
   mockTrackFindStaleWithPrimaryArtist.mockResolvedValue([]);
+  mockTrackFindStaleVibeProfiles.mockResolvedValue([]);
   mockTrackUpdateLastfmTags.mockResolvedValue(undefined);
+  mockTrackUpdateVibeProfiles.mockResolvedValue(undefined);
+  mockTrackInvalidateVibeProfilesByArtist.mockResolvedValue(undefined);
   mockTrackSetEnrichmentVersion.mockResolvedValue(0);
   mockGetArtistTopTags.mockResolvedValue([]);
   mockGetTrackTopTags.mockResolvedValue([]);
@@ -110,6 +123,7 @@ describe("enrichLastfm", () => {
     expect(stepNames).toEqual([
       "enrich-artists/lastfm-tags-0",
       "enrich-tracks/lastfm-tags-0",
+      "derive-vibe-profile-0",
     ]);
   });
 
@@ -269,6 +283,83 @@ describe("enrichLastfm", () => {
     );
     expect(stepNames).toContain("enrich-tracks/lastfm-tags-0");
     expect(stepNames).toContain("enrich-tracks/lastfm-tags-100");
+  });
+
+  it("invalidates vibe profiles for every artist in each chunk after updating tags", async () => {
+    mockArtistFindStale.mockResolvedValueOnce([
+      { id: "a1", spotifyId: "sa1", name: "Artist 1" },
+      { id: "a2", spotifyId: "sa2", name: "Artist 2" },
+    ]);
+    mockGetArtistTopTags
+      .mockResolvedValueOnce(["rock"])
+      .mockResolvedValueOnce(["pop"]);
+
+    const step = createMockStep();
+    await handler({ step });
+
+    expect(mockTrackInvalidateVibeProfilesByArtist).toHaveBeenCalledWith([
+      "a1",
+      "a2",
+    ]);
+  });
+
+  it("does not call invalidation when no artists were processed", async () => {
+    // No stale artists — artist step returns 0 and no updates array
+    const step = createMockStep();
+    await handler({ step });
+
+    expect(mockTrackInvalidateVibeProfilesByArtist).not.toHaveBeenCalled();
+  });
+
+  it("derives vibe profiles for stale tracks after Last.fm enrichment", async () => {
+    mockTrackFindStaleVibeProfiles.mockResolvedValueOnce([
+      {
+        id: "t1",
+        artistNames: ["Radiohead"],
+        claude: {
+          mood: "melancholic",
+          energy: "low",
+          danceability: "low",
+          vibeTags: ["late-night"],
+        },
+        trackSpotify: { derivedEra: "1990s" },
+        trackLastfm: { tags: ["alternative-rock"] },
+        artistLastfmTags: ["rock", "indie"],
+      },
+    ]);
+
+    const step = createMockStep();
+    await handler({ step });
+
+    expect(mockTrackFindStaleVibeProfiles).toHaveBeenCalled();
+    expect(mockTrackUpdateVibeProfiles).toHaveBeenCalledTimes(1);
+    const updates = mockTrackUpdateVibeProfiles.mock.calls[0]![0];
+    expect(updates[0].id).toBe("t1");
+    expect(updates[0].mood).toBe("melancholic");
+    expect(updates[0].genres).toContain("alternative-rock");
+  });
+
+  it("chunks vibe derivation at 500-track boundary", async () => {
+    const staleVibes = Array.from({ length: 500 }, (_, i) => ({
+      id: `t${i}`,
+      artistNames: ["Artist"],
+      claude: null,
+      trackSpotify: null,
+      trackLastfm: null,
+      artistLastfmTags: [],
+    }));
+    mockTrackFindStaleVibeProfiles
+      .mockResolvedValueOnce(staleVibes)
+      .mockResolvedValueOnce([]);
+
+    const step = createMockStep();
+    await handler({ step });
+
+    const stepNames = step.run.mock.calls.map(
+      (call: unknown[]) => call[0]
+    );
+    expect(stepNames).toContain("derive-vibe-profile-0");
+    expect(stepNames).toContain("derive-vibe-profile-500");
   });
 
   it("returns counts of processed entities", async () => {

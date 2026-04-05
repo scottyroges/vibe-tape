@@ -4,11 +4,13 @@ import { fetchLikedSongs, fetchArtists } from "@/lib/spotify";
 import {
   SPOTIFY_ENRICHMENT_VERSION,
   CLAUDE_ENRICHMENT_VERSION,
+  VIBE_DERIVATION_VERSION,
   SPOTIFY_EXTENDED_QUOTA,
   deriveEra,
 } from "@/lib/enrichment";
 import { buildClassifyPrompt } from "@/lib/prompts/classify-tracks";
 import { classifyTracks } from "@/lib/claude";
+import { deriveVibeProfile } from "@/lib/vibe-profile";
 import { trackRepository } from "@/repositories/track.repository";
 import { artistRepository } from "@/repositories/artist.repository";
 import { userRepository } from "@/repositories/user.repository";
@@ -18,6 +20,7 @@ const ARTIST_GENRE_CHUNK_SIZE = 500;
 const TRACK_ERA_CHUNK_SIZE = 1000;
 const CLAUDE_CLASSIFY_CHUNK_SIZE = 500;
 const CLAUDE_BATCH_SIZE = 50;
+const VIBE_DERIVATION_CHUNK_SIZE = 500;
 
 const VALID_ENERGY_VALUES = new Set(["low", "medium", "high"]);
 
@@ -235,6 +238,41 @@ export const syncLibrary = inngest.createFunction(
       );
       if (processed < CLAUDE_CLASSIFY_CHUNK_SIZE) break;
       claudeOffset += CLAUDE_CLASSIFY_CHUNK_SIZE;
+    }
+
+    // ── Vibe Profile Derivation ──
+    // Merges Claude + Spotify era + Last.fm (if already populated) into the
+    // canonical vibeMood/vibeEnergy/vibeGenres/vibeTags columns on Track.
+    // Runs at the end of sync; the same step also runs at the end of
+    // enrich-lastfm to re-derive tracks after Last.fm data loads.
+    let vibeOffset = 0;
+    while (true) {
+      const processed = await step.run(
+        `derive-vibe-profile-${vibeOffset}`,
+        async () => {
+          const stale = await trackRepository.findStaleVibeProfiles(
+            VIBE_DERIVATION_VERSION,
+            VIBE_DERIVATION_CHUNK_SIZE
+          );
+          if (stale.length === 0) return 0;
+
+          const updates = stale.map((t) => {
+            const profile = deriveVibeProfile({
+              claude: t.claude,
+              trackSpotify: t.trackSpotify,
+              trackLastfm: t.trackLastfm,
+              artistLastfmTags: t.artistLastfmTags,
+              artistNames: t.artistNames,
+            });
+            return { id: t.id, ...profile };
+          });
+
+          await trackRepository.updateVibeProfiles(updates);
+          return stale.length;
+        }
+      );
+      if (processed < VIBE_DERIVATION_CHUNK_SIZE) break;
+      vibeOffset += VIBE_DERIVATION_CHUNK_SIZE;
     }
 
     await step.run("update-status", async () => {
