@@ -230,15 +230,27 @@ describe("playlistRouter.generate", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects targetDurationMinutes above 240", async () => {
+  it("rejects targetDurationMinutes above 360", async () => {
     const caller = authedCaller();
 
     await expect(
       caller.playlist.generate({
         seedTrackIds: SEEDS,
-        targetDurationMinutes: 300,
+        targetDurationMinutes: 400,
       })
     ).rejects.toThrow();
+  });
+
+  it("accepts targetDurationMinutes up to 360", async () => {
+    const caller = authedCaller();
+    mockCreatePlaceholder.mockResolvedValueOnce("pl-long");
+
+    await expect(
+      caller.playlist.generate({
+        seedTrackIds: SEEDS,
+        targetDurationMinutes: 360,
+      })
+    ).resolves.toEqual({ playlistId: "pl-long" });
   });
 
   it("rejects seeds the user does not own", async () => {
