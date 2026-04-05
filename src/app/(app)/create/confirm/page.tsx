@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTRPC } from "@/lib/trpc/client";
@@ -93,10 +94,12 @@ export default function ConfirmPage() {
         {seeds.map((song) => (
           <div key={song.id} className={styles.seedRow}>
             {song.albumArtUrl ? (
-              <img
+              <Image
                 className={styles.albumArt}
                 src={song.albumArtUrl}
                 alt=""
+                width={48}
+                height={48}
               />
             ) : (
               <div className={styles.albumArtPlaceholder}>

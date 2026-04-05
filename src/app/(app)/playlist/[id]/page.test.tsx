@@ -69,7 +69,8 @@ vi.mock("@/lib/trpc/client", () => ({
   }),
 }));
 
-import PlaylistDetailPage, { MAX_POLLS, POLL_INTERVAL_MS } from "./page";
+import PlaylistDetailPage from "./page";
+import { MAX_POLLS, POLL_INTERVAL_MS } from "./constants";
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({

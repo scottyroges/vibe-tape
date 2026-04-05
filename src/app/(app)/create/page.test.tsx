@@ -141,13 +141,18 @@ describe("CreatePage", () => {
 
   it("renders album art image when albumArtUrl is present", async () => {
     mockListFn.mockResolvedValue([
-      makeSong({ albumArtUrl: "https://img.spotify.com/cover.jpg" }),
+      makeSong({ albumArtUrl: "https://i.scdn.co/image/cover.jpg" }),
     ]);
     renderWithClient(<CreatePage />);
 
     await screen.findByText("Test Song");
     const img = document.querySelector("img");
-    expect(img).toHaveAttribute("src", "https://img.spotify.com/cover.jpg");
+    // `next/image` rewrites src through the Next image optimizer
+    // (`/_next/image?url=...&w=...&q=...`). Assert the original URL
+    // shows up in the rewritten src rather than matching it verbatim.
+    expect(img?.getAttribute("src")).toContain(
+      encodeURIComponent("https://i.scdn.co/image/cover.jpg")
+    );
   });
 
   it("filters songs by name when searching", async () => {
