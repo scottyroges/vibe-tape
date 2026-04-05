@@ -60,13 +60,22 @@ const MAX_RATE_LIMIT_RETRIES = 3;
 
 async function spotifyFetch(
   url: string,
-  accessToken: string
+  accessToken: string,
+  init?: { method?: string; body?: string }
 ): Promise<Response> {
   let rateLimitRetries = 0;
 
   while (true) {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+    };
+    if (init?.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      ...(init?.method ? { method: init.method } : {}),
+      headers,
+      ...(init?.body !== undefined ? { body: init.body } : {}),
     });
 
     if (res.status === 429) {
@@ -149,4 +158,63 @@ export async function fetchArtists(
   }
 
   return result;
+}
+
+const MAX_TRACKS_PER_PLAYLIST_REQUEST = 100;
+
+type CreatePlaylistResponse = { id: string };
+
+export async function createPlaylist(
+  accessToken: string,
+  opts: { name: string; description: string; public: boolean }
+): Promise<string> {
+  const res = await spotifyFetch(
+    "https://api.spotify.com/v1/me/playlists",
+    accessToken,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: opts.name,
+        description: opts.description,
+        public: opts.public,
+      }),
+    }
+  );
+  const data: CreatePlaylistResponse = await res.json();
+  return data.id;
+}
+
+export async function addTracksToPlaylist(
+  accessToken: string,
+  playlistId: string,
+  uris: string[]
+): Promise<void> {
+  if (uris.length === 0) return;
+
+  const batches = chunk(uris, MAX_TRACKS_PER_PLAYLIST_REQUEST);
+  for (const batch of batches) {
+    await spotifyFetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      accessToken,
+      {
+        method: "POST",
+        body: JSON.stringify({ uris: batch }),
+      }
+    );
+  }
+}
+
+export async function replacePlaylistTracks(
+  accessToken: string,
+  playlistId: string,
+  uris: string[]
+): Promise<void> {
+  await spotifyFetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+    accessToken,
+    {
+      method: "PUT",
+      body: JSON.stringify({ uris }),
+    }
+  );
 }
