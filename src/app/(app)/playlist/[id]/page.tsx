@@ -12,6 +12,11 @@ import {
 import { useTRPC } from "@/lib/trpc/client";
 import { MusicNoteIcon } from "@/components/icons";
 import type { VibeProfile } from "@/lib/vibe-profile";
+import {
+  scoreTrackBreakdown,
+  type ScoreBreakdown,
+} from "@/lib/playlist-scoring";
+import type { CanonicalMood } from "@/lib/prompts/classify-tracks";
 import styles from "./playlist.module.css";
 import { MAX_POLLS, POLL_INTERVAL_MS } from "./constants";
 
@@ -332,12 +337,41 @@ export default function PlaylistDetailPage() {
               claudeScore={t.claudeScore}
               mathScore={t.mathScore}
               finalScore={t.finalScore}
+              vibeProfile={trackVibeProfile(t)}
+              claudeTarget={claudeTarget}
+              mathTarget={mathTarget}
             />
           ))}
         </div>
       </section>
     </div>
   );
+}
+
+/**
+ * Narrow a track row's loose DB-shape vibe fields (`string | null`) to
+ * the strict `VibeProfile` shape the scoring functions expect. Every
+ * populated `vibe_mood` in the DB is guaranteed canonical by the
+ * Claude v2 prompt, so the cast is trusted. Returns `null` when the
+ * track has no vibe data at all (enrichment hasn't run yet) — callers
+ * treat that as "no breakdown to show".
+ */
+function trackVibeProfile(track: {
+  vibeMood: string | null;
+  vibeEnergy: string | null;
+  vibeDanceability: string | null;
+  vibeGenres: string[];
+  vibeTags: string[];
+  vibeUpdatedAt: Date | string | null;
+}): VibeProfile | null {
+  if (!track.vibeUpdatedAt) return null;
+  return {
+    mood: track.vibeMood as CanonicalMood | null,
+    energy: track.vibeEnergy as "low" | "medium" | "high" | null,
+    danceability: track.vibeDanceability as "low" | "medium" | "high" | null,
+    genres: track.vibeGenres,
+    tags: track.vibeTags,
+  };
 }
 
 function TrackRow({
@@ -347,22 +381,34 @@ function TrackRow({
   claudeScore,
   mathScore,
   finalScore,
+  vibeProfile,
+  claudeTarget,
+  mathTarget,
 }: {
   albumArtUrl: string | null;
   title: string;
   artist: string;
   // All three scores are optional so this component works for both
-  // generated tracks (always have scores) and seed-only rows (no
-  // persisted scores). When any is `null`/`undefined`, the score cell
-  // is omitted.
+  // generated tracks (always have scores) and seed rows (no persisted
+  // scores). When any is null/undefined, the score cell is omitted.
   claudeScore?: number | null;
   mathScore?: number | null;
   finalScore?: number | null;
+  // Per-component breakdown inputs. If any is missing, the row stays
+  // non-expandable (seeds section, legacy rows).
+  vibeProfile?: VibeProfile | null;
+  claudeTarget?: VibeProfile | null;
+  mathTarget?: VibeProfile | null;
 }) {
   const hasScores =
     claudeScore != null && mathScore != null && finalScore != null;
-  return (
-    <div className={styles.trackRow}>
+  // Only show the expand affordance when we have everything needed to
+  // render a meaningful breakdown: the track's vibe profile AND both
+  // targets. Partial data leaves the row as a flat summary.
+  const canExpand = !!vibeProfile && !!claudeTarget && !!mathTarget;
+
+  const summary = (
+    <>
       {albumArtUrl ? (
         <Image
           className={styles.albumArt}
@@ -393,6 +439,150 @@ function TrackRow({
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (!canExpand) {
+    return <div className={styles.trackRow}>{summary}</div>;
+  }
+
+  return (
+    <details className={styles.trackRowDetails}>
+      <summary className={styles.trackRow}>{summary}</summary>
+      <TrackBreakdownPanel
+        vibeProfile={vibeProfile}
+        claudeTarget={claudeTarget}
+        mathTarget={mathTarget}
+      />
+    </details>
+  );
+}
+
+/**
+ * Expanded details for a generated track: the track's own vibe profile
+ * rendered as chips, then a side-by-side table of per-component
+ * similarity vs each of the two targets. Columns show similarity and
+ * weighted contribution so the user can see where the final score
+ * came from.
+ */
+function TrackBreakdownPanel({
+  vibeProfile,
+  claudeTarget,
+  mathTarget,
+}: {
+  vibeProfile: VibeProfile;
+  claudeTarget: VibeProfile;
+  mathTarget: VibeProfile;
+}) {
+  const claudeBreakdown = scoreTrackBreakdown(vibeProfile, claudeTarget);
+  const mathBreakdown = scoreTrackBreakdown(vibeProfile, mathTarget);
+  return (
+    <div className={styles.trackBreakdown}>
+      <div className={styles.trackBreakdownProfile}>
+        <div className={styles.trackBreakdownLabel}>Track vibe</div>
+        <dl className={styles.targetScalars}>
+          {vibeProfile.mood && (
+            <>
+              <dt>Mood</dt>
+              <dd>{vibeProfile.mood}</dd>
+            </>
+          )}
+          {vibeProfile.energy && (
+            <>
+              <dt>Energy</dt>
+              <dd>{vibeProfile.energy}</dd>
+            </>
+          )}
+          {vibeProfile.danceability && (
+            <>
+              <dt>Dance</dt>
+              <dd>{vibeProfile.danceability}</dd>
+            </>
+          )}
+        </dl>
+        {vibeProfile.genres.length > 0 && (
+          <div className={styles.targetChipGroup}>
+            <div className={styles.targetChipGroupLabel}>Genres</div>
+            <div className={styles.targetChips}>
+              {vibeProfile.genres.map((g) => (
+                <span key={g} className={styles.targetChip}>
+                  {g}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {vibeProfile.tags.length > 0 && (
+          <div className={styles.targetChipGroup}>
+            <div className={styles.targetChipGroupLabel}>Tags</div>
+            <div className={styles.targetChips}>
+              {vibeProfile.tags.map((t) => (
+                <span key={t} className={styles.targetChip}>
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <BreakdownTable label="Claude" breakdown={claudeBreakdown} />
+      <BreakdownTable label="Math" breakdown={mathBreakdown} />
+    </div>
+  );
+}
+
+function BreakdownTable({
+  label,
+  breakdown,
+}: {
+  label: string;
+  breakdown: ScoreBreakdown;
+}) {
+  const rows: { name: string; key: keyof Omit<ScoreBreakdown, "total"> }[] = [
+    { name: "Mood", key: "mood" },
+    { name: "Energy", key: "energy" },
+    { name: "Dance", key: "danceability" },
+    { name: "Genres", key: "genres" },
+    { name: "Tags", key: "tags" },
+  ];
+  return (
+    <div className={styles.breakdownTable}>
+      <div className={styles.trackBreakdownLabel}>{label}</div>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col" className={styles.breakdownNameCol}>
+              Component
+            </th>
+            <th scope="col">Sim</th>
+            <th scope="col">×Wt</th>
+            <th scope="col">=Contrib</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ name, key }) => {
+            const c = breakdown[key];
+            return (
+              <tr key={key}>
+                <th scope="row" className={styles.breakdownNameCol}>
+                  {name}
+                </th>
+                <td>{formatScore(c.similarity)}</td>
+                <td>{c.weight.toFixed(2)}</td>
+                <td>{formatScore(c.contribution)}</td>
+              </tr>
+            );
+          })}
+          <tr className={styles.breakdownTotalRow}>
+            <th scope="row" className={styles.breakdownNameCol}>
+              Total
+            </th>
+            <td />
+            <td />
+            <td>{formatScore(breakdown.total)}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
