@@ -100,6 +100,20 @@ function makePlaylist(
       finalScore?: number | null;
     }[];
     seeds?: { id: string; name: string; artistsDisplay: string }[];
+    claudeTarget?: {
+      mood: string | null;
+      energy: "low" | "medium" | "high" | null;
+      danceability: "low" | "medium" | "high" | null;
+      genres: string[];
+      tags: string[];
+    } | null;
+    mathTarget?: {
+      mood: string | null;
+      energy: "low" | "medium" | "high" | null;
+      danceability: "low" | "medium" | "high" | null;
+      genres: string[];
+      tags: string[];
+    } | null;
   } = {}
 ) {
   const tracks = (overrides.tracks ?? [{ id: "g1", name: "Gen Song 1", artistsDisplay: "Art" }]).map((t) => ({
@@ -149,8 +163,10 @@ function makePlaylist(
     generatedTrackIds: tracks.map((t) => t.id),
     targetDurationMinutes: 60,
     userIntent: overrides.userIntent ?? null,
-    claudeTarget: null,
-    mathTarget: null,
+    claudeTarget:
+      overrides.claudeTarget === undefined ? null : overrides.claudeTarget,
+    mathTarget:
+      overrides.mathTarget === undefined ? null : overrides.mathTarget,
     errorMessage: overrides.errorMessage ?? null,
     spotifyPlaylistId: overrides.spotifyPlaylistId ?? null,
     artImageUrl: null,
@@ -389,6 +405,56 @@ describe("PlaylistDetailPage", () => {
     // Claude + math breakdown shows the raw per-component numbers.
     expect(screen.getByText(/C 0\.81/)).toBeInTheDocument();
     expect(screen.getByText(/M 0\.72/)).toBeInTheDocument();
+  });
+
+  it("renders Claude + math vibe target cards when both are set", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        claudeTarget: {
+          mood: "uplifting",
+          energy: "high",
+          danceability: "high",
+          genres: ["hip-hop", "pop"],
+          tags: ["summer"],
+        },
+        mathTarget: {
+          mood: "peaceful",
+          energy: "medium",
+          danceability: null,
+          genres: ["indie"],
+          tags: [],
+        },
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByRole("heading", { name: /vibe targets/i });
+    // Both labels render.
+    expect(screen.getByText(/^claude$/i)).toBeInTheDocument();
+    expect(screen.getByText(/math \(seed centroid\)/i)).toBeInTheDocument();
+    // Scalar moods from each target.
+    expect(screen.getByText("uplifting")).toBeInTheDocument();
+    expect(screen.getByText("peaceful")).toBeInTheDocument();
+    // Genre chips from both sides.
+    expect(screen.getByText("hip-hop")).toBeInTheDocument();
+    expect(screen.getByText("indie")).toBeInTheDocument();
+  });
+
+  it("does not render the targets section when both targets are null", async () => {
+    mockGetByIdFn.mockResolvedValue(
+      makePlaylist({
+        status: "PENDING",
+        claudeTarget: null,
+        mathTarget: null,
+      })
+    );
+    renderWithClient(<PlaylistDetailPage />);
+
+    await screen.findByRole("heading", { name: /golden hour/i });
+    expect(
+      screen.queryByRole("heading", { name: /vibe targets/i })
+    ).not.toBeInTheDocument();
   });
 
   it("omits the score cell when the track has no persisted scores", async () => {

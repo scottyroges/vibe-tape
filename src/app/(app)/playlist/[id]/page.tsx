@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-query";
 import { useTRPC } from "@/lib/trpc/client";
 import { MusicNoteIcon } from "@/components/icons";
+import type { VibeProfile } from "@/lib/vibe-profile";
 import styles from "./playlist.module.css";
 import { MAX_POLLS, POLL_INTERVAL_MS } from "./constants";
 
@@ -138,8 +139,16 @@ export default function PlaylistDetailPage() {
   }
 
   const playlist = playlistQuery.data;
-  const { status, vibeName, vibeDescription, userIntent, tracks, seeds } =
-    playlist;
+  const {
+    status,
+    vibeName,
+    vibeDescription,
+    userIntent,
+    tracks,
+    seeds,
+    claudeTarget,
+    mathTarget,
+  } = playlist;
 
   // ── GENERATING ────────────────────────────────────────────────────────
   if (status === "GENERATING") {
@@ -279,6 +288,20 @@ export default function PlaylistDetailPage() {
         )}
       </div>
 
+      {(claudeTarget || mathTarget) && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionHeading}>Vibe targets</h2>
+          <div className={styles.targetsGrid}>
+            {claudeTarget && (
+              <VibeTargetCard label="Claude" target={claudeTarget} />
+            )}
+            {mathTarget && (
+              <VibeTargetCard label="Math (seed centroid)" target={mathTarget} />
+            )}
+          </div>
+        </section>
+      )}
+
       {seeds.length > 0 && (
         <section className={styles.section}>
           <h2 className={styles.sectionHeading}>Seeds</h2>
@@ -381,4 +404,68 @@ function TrackRow({
  */
 function formatScore(value: number): string {
   return value.toFixed(2);
+}
+
+/**
+ * Renders one of the two vibe profile targets (Claude or math) as a
+ * compact card: scalar fields stacked, then chip lists for genres and
+ * tags. Empty arrays and null scalars are hidden rather than showing
+ * "—" so the card only surfaces signals the target actually carries.
+ */
+function VibeTargetCard({
+  label,
+  target,
+}: {
+  label: string;
+  target: VibeProfile;
+}) {
+  return (
+    <div className={styles.targetCard}>
+      <div className={styles.targetLabel}>{label}</div>
+      <dl className={styles.targetScalars}>
+        {target.mood && (
+          <>
+            <dt>Mood</dt>
+            <dd>{target.mood}</dd>
+          </>
+        )}
+        {target.energy && (
+          <>
+            <dt>Energy</dt>
+            <dd>{target.energy}</dd>
+          </>
+        )}
+        {target.danceability && (
+          <>
+            <dt>Dance</dt>
+            <dd>{target.danceability}</dd>
+          </>
+        )}
+      </dl>
+      {target.genres.length > 0 && (
+        <div className={styles.targetChipGroup}>
+          <div className={styles.targetChipGroupLabel}>Genres</div>
+          <div className={styles.targetChips}>
+            {target.genres.map((g) => (
+              <span key={g} className={styles.targetChip}>
+                {g}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {target.tags.length > 0 && (
+        <div className={styles.targetChipGroup}>
+          <div className={styles.targetChipGroupLabel}>Tags</div>
+          <div className={styles.targetChips}>
+            {target.tags.map((t) => (
+              <span key={t} className={styles.targetChip}>
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
