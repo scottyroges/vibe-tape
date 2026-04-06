@@ -257,6 +257,12 @@ export default function PlaylistDetailPage() {
         <p className={styles.error}>
           Couldn&apos;t save to Spotify. Please try again. If this keeps
           happening, check Spotify for an empty playlist you can delete.
+          {saveMutation.error?.message && (
+            <>
+              <br />
+              <small>{saveMutation.error.message}</small>
+            </>
+          )}
         </p>
       )}
 

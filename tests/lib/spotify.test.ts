@@ -396,7 +396,7 @@ describe("addTracksToPlaylist", () => {
     const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
       .mock.calls[0]!;
     expect(url).toBe(
-      "https://api.spotify.com/v1/playlists/pl-1/tracks"
+      "https://api.spotify.com/v1/playlists/pl-1/items"
     );
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ uris });
@@ -462,7 +462,7 @@ describe("replacePlaylistTracks", () => {
     const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
       .mock.calls[0]!;
     expect(url).toBe(
-      "https://api.spotify.com/v1/playlists/pl-1/tracks"
+      "https://api.spotify.com/v1/playlists/pl-1/items"
     );
     expect(init.method).toBe("PUT");
     expect(init.headers).toMatchObject({
@@ -502,7 +502,7 @@ describe("removeTracksFromPlaylist", () => {
     const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>)
       .mock.calls[0]!;
     expect(url).toBe(
-      "https://api.spotify.com/v1/playlists/pl-1/tracks"
+      "https://api.spotify.com/v1/playlists/pl-1/items"
     );
     expect(init.method).toBe("DELETE");
     expect(init.headers).toMatchObject({
