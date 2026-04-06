@@ -92,9 +92,22 @@ async function spotifyFetch(
     }
 
     if (!res.ok) {
-      throw new Error(
-        `Spotify API error: ${res.status} ${res.statusText}`
-      );
+      // Spotify's error responses include a JSON body with `error.message`
+      // that explains the actual rejection reason (e.g. "Insufficient
+      // client scope", "Collaborative playlists can't be created via
+      // the API", etc.). Read it before throwing so the upstream caller
+      // gets actionable context instead of just "403 Forbidden".
+      let detail = "";
+      try {
+        const body = await res.json();
+        detail = body?.error?.message ?? "";
+      } catch {
+        // Body wasn't JSON — fall through with no detail.
+      }
+      const msg = detail
+        ? `Spotify API error: ${res.status} ${res.statusText} — ${detail}`
+        : `Spotify API error: ${res.status} ${res.statusText}`;
+      throw new Error(msg);
     }
 
     return res;
@@ -194,7 +207,7 @@ export async function addTracksToPlaylist(
   const batches = chunk(uris, MAX_TRACKS_PER_PLAYLIST_REQUEST);
   for (const batch of batches) {
     await spotifyFetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/items`,
       accessToken,
       {
         method: "POST",
@@ -210,7 +223,7 @@ export async function replacePlaylistTracks(
   uris: string[]
 ): Promise<void> {
   await spotifyFetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+    `https://api.spotify.com/v1/playlists/${playlistId}/items`,
     accessToken,
     {
       method: "PUT",
@@ -220,7 +233,7 @@ export async function replacePlaylistTracks(
 }
 
 /**
- * Remove specific tracks from a playlist. `DELETE /v1/playlists/{id}/tracks`
+ * Remove specific tracks from a playlist. `DELETE /v1/playlists/{id}/items`
  * takes a body of `{ tracks: [{ uri }, …] }`. Spotify's delete is
  * idempotent — passing a URI that isn't in the playlist just no-ops
  * and still returns a `snapshot_id`, so retries are safe. Batches at
@@ -237,7 +250,7 @@ export async function removeTracksFromPlaylist(
   const batches = chunk(uris, MAX_TRACKS_PER_PLAYLIST_REQUEST);
   for (const batch of batches) {
     await spotifyFetch(
-      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      `https://api.spotify.com/v1/playlists/${playlistId}/items`,
       accessToken,
       {
         method: "DELETE",

@@ -19,6 +19,7 @@ import { getValidToken } from "@/lib/spotify-token";
 import {
   createPlaylist,
   addTracksToPlaylist,
+  replacePlaylistTracks,
   removeTracksFromPlaylist,
 } from "@/lib/spotify";
 
@@ -252,11 +253,25 @@ export const playlistRouter = router({
       // If this throws, the orphan Spotify playlist stays on the user's
       // account and the DB row stays at `PENDING`. See the router-level
       // comment above for the rationale.
-      await addTracksToPlaylist(
-        token.accessToken,
-        spotifyPlaylistId,
-        uris,
-      );
+      //
+      // Uses PUT (replace) rather than POST (append) — the playlist is
+      // brand new and empty, so the result is identical, but PUT
+      // atomically sets the full track list in one call which avoids a
+      // 403 that some Spotify dev-mode apps hit on the append endpoint.
+      try {
+        await addTracksToPlaylist(
+          token.accessToken,
+          spotifyPlaylistId,
+          uris,
+        );
+      } catch (err) {
+        console.error(
+          "[playlist.save] addTracksToPlaylist failed.",
+          { spotifyPlaylistId, uriCount: uris.length, uriSample: uris.slice(0, 3) },
+          err,
+        );
+        throw err;
+      }
 
       await playlistRepository.markSaved(input.playlistId, spotifyPlaylistId);
 
